@@ -2,11 +2,11 @@
 
 ## 準備
 
-- [ ] 技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める
-  - 第一候補: Tauri（Rust + Web の画面）。配布物が小さく、OS の資格情報ストア（`keyring` クレート）、タスクトレイ / メニューバー、自動更新が使える。HTTP（Vultr の API）と外部コマンド（Tailscale の CLI）の呼び出しも Rust 側で書ける
-  - ほかの候補: Electron（大きいが情報が多い）、Flutter、.NET（Avalonia）
-  - 比べる観点: 両 OS でのトレイ常駐、資格情報ストア、Tailscale の CLI の呼び出し、ビルドのしやすさ（sx360 の WSL / Windows、m1）、配布物の大きさ、コード署名
-  - 決めたら CLAUDE.md の「設計の方針」に書く
+- [ ] 技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める [plan](docs/plans/tech-stack.md)
+  - 第一候補: Tauri 2（Rust + Web の画面）。ほかに Electron、Wails、Flutter、.NET（Avalonia）
+  - [ ] Step 1: 候補を机上で比べる（トレイ、資格情報ストア、外部コマンドと HTTP、ビルド、配布、保守、書きやすさ）
+  - [ ] Step 2: 上位 1〜2 候補で最小のアプリを作り、sx360（Windows）と m1（macOS）で動かす（VPS は作らない）
+  - [ ] Step 3: ユーザーと決め、CLAUDE.md と TODO.md に書く
 - [ ] 開発環境を作る（選んだフレームワークのツールチェーンを sx360 の Windows / WSL と m1 に入れる）
   - 依存: 「技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める」
   - WSL からビルドできるか、Windows 側でビルドするかを確かめる
