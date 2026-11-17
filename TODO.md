@@ -2,11 +2,12 @@
 
 ## 準備
 
-- [ ] 技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める [plan](docs/plans/tech-stack.md)
-  - 第一候補: Tauri 2（Rust + Web の画面）。ほかに Electron、Wails、Flutter、.NET（Avalonia）
-  - [ ] Step 1: 候補を机上で比べる（トレイ、資格情報ストア、外部コマンドと HTTP、ビルド、配布、保守、書きやすさ）
-  - [ ] Step 2: 上位 1〜2 候補で最小のアプリを作り、sx360（Windows）と m1（macOS）で動かす（VPS は作らない）
-  - [ ] Step 3: ユーザーと決め、CLAUDE.md と TODO.md に書く
+- [~] 技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める [plan](docs/plans/tech-stack.md)
+  - 決定: 2026-11-16 にユーザーが Tauri 2（Rust + Web の画面）に決めた。Step 2 の試作で、WSL からの Windows のビルドと macOS のメニューバーを確かめる
+  - [x] Step 1: 候補を机上で比べる（トレイ、資格情報ストア、外部コマンドと HTTP、ビルド、配布、保守、書きやすさ）
+    - 2026-11-16: Tauri 2 がいちばん合う、Electron が次点。Wails v3、Flutter、Avalonia は見送る（プランの「調査結果」）
+  - [ ] Step 2: Tauri 2 で最小のアプリを作り（だめな項目があれば Electron でも作って比べる）、sx360（Windows）と m1（macOS）で動かす（VPS は作らない）
+  - [ ] Step 3: 試作の結果から、ディレクトリ構成とビルドの手順を CLAUDE.md に書き、TODO.md のタスクを Tauri に合わせて直す
 - [ ] 開発環境を作る（選んだフレームワークのツールチェーンを sx360 の Windows / WSL と m1 に入れる）
   - 依存: 「技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める」
   - WSL からビルドできるか、Windows 側でビルドするかを確かめる

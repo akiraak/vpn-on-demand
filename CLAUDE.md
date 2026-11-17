@@ -48,13 +48,14 @@
 
 ## 設計の方針
 
-- **対象は Windows と macOS のデスクトップアプリ。** 1 つのコードベースから両方を作る。フレームワークは技術選定のタスクで決める（決めたらここに書く）。
+- **対象は Windows と macOS のデスクトップアプリ。** 1 つのコードベースから両方を作る。**フレームワークは Tauri 2**（2026-11-16 に決めた。比較は `docs/plans/tech-stack.md`）。処理（Vultr の API、Tailscale の CLI、資格情報ストア、タイマー）は Rust 側にまとめ、画面（Web、TypeScript）は表示と操作だけにする。資格情報ストアは `keyring` クレートを使う。
 - **画面**: 国を選んで接続・切断するメイン画面（状態、外の IP アドレスと国、接続してからの時間と概算の料金）と、キーを入力する設定画面。常駐してタスクトレイ / メニューバーから操作できるようにする。
 - **国の選択**: Vultr の `/regions` のリージョンを国ごとにまとめて出す。1 つの国に複数のリージョンがあれば（米国など）都市も選べるようにする。既定は日本（`nrt`）。
 - **課金を止めることを最優先にする。** 消し忘れを防ぐ仕組み（一定時間で自動で切断、アプリを終了するときに VPS が残っていれば警告など）を持つ。切断は失敗しても再試行でき、何度実行しても安全（冪等）にする。VPS はアプリ専用のラベル / タグで見つけ、ローカルの状態に頼らない（アプリが落ちても、次に起動したときに残った VPS を見つけて消せる）。
 - **Tailscale は前提。** 利用者の PC に Tailscale のアプリが入っていて、tailnet にログインしていることを前提にし、アプリは Tailscale の CLI（または LocalAPI）で出口ノードを切り替える。Tailscale が無い・ログインしていないときは案内を出す。
   - Windows: `C:\Program Files\Tailscale\tailscale.exe`
-  - macOS: `/Applications/Tailscale.app/Contents/MacOS/Tailscale`（App Store 版とスタンドアロン版で違いがあるかを確かめる）
+  - macOS: `/usr/local/bin/tailscale`（スタンドアロン版で CLI のランチャーを入れた場合）→ `/Applications/Tailscale.app/Contents/MacOS/Tailscale`（App Store 版はここ）の順に探す
+  - LocalAPI は内部の API で文書化されていないので使わない
 - **専用の VPN クライアントやドライバは入れない。** 通信の経路は Tailscale に任せる。
 
 ## 秘密情報
