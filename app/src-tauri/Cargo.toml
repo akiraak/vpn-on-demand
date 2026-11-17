@@ -1,7 +1,9 @@
 [package]
-name = "vpn-on-demand-poc"
+name = "vpn-on-demand"
 version = "0.1.0"
-description = "VPN on Demand の試作"
+description = "On-demand personal VPN: a Vultr server as a Tailscale exit node, only while you need it"
+license = "MIT"
+repository = "https://github.com/akiraak/vpn-on-demand"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,7 +12,7 @@ edition = "2024"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "vpn_on_demand_poc_lib"
+name = "vpn_on_demand_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -22,6 +24,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = "4.2.0"
 reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls"] }
+tokio = { version = "1", features = ["time", "sync", "macros", "rt-multi-thread"] }
+base64 = "0.22"
+tauri-plugin-single-instance = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

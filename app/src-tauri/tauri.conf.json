@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "VPN on Demand PoC",
+  "productName": "VPN on Demand",
   "version": "0.1.0",
-  "identifier": "local.vpnondemand.poc",
+  "identifier": "io.github.akiraak.vpn-on-demand",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,9 +13,12 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "VPN on Demand（試作）",
-        "width": 720,
-        "height": 560
+        "label": "main",
+        "title": "VPN on Demand",
+        "width": 560,
+        "height": 680,
+        "minWidth": 420,
+        "minHeight": 520
       }
     ],
     "security": {
@@ -24,16 +27,20 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis",
-      "app"
-    ],
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "On-demand personal VPN with Vultr and Tailscale",
+    "copyright": "Copyright (c) 2026 Akira Kozakai. MIT License.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

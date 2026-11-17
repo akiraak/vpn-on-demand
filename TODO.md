@@ -19,6 +19,22 @@
 - [ ] Tailscale の操作方法を調べる: Windows と macOS（App Store 版とスタンドアロン版）で、アプリから CLI（`tailscale set --exit-node`、`tailscale status --json`）を呼べるか、LocalAPI を使う方がよいか
   - Tailscale が入っていない・ログインしていない・ほかの出口ノードを使っているときの見分け方も調べる
 
+## Windows 版を完成させる
+
+- [~] Windows 版を完成させる（誰でも GitHub の README を読んで、インストールして使える状態にする） [plan](docs/plans/windows-app.md)
+  - 決定: 2026-11-16 にユーザーが決めた。完成の条件は「誰でも GitHub のドキュメントを読んでアプリをインストールして使えること」。macOS（m1）の確認は後回しにし、コードは macOS でも動くように書く
+  - 関連: 下の「コア処理」「画面」「消し忘れの対策」の各タスクを、このプランの Phase で進める
+  - [x] Phase 1: 試作を `app/` に移し、英語にして、構成を整える（`poc/` は消す）
+  - [x] Phase 2: Rust のコア（Vultr、cloud-init、Tailscale、接続・切断の流れ）と、偽物を使ったテスト
+    - 2026-11-16: 単体テスト 23 件
+  - [x] Phase 3: 画面（Main、Settings）とトレイ
+    - 2026-11-16: sx360 でキーが無いときの画面（初回の案内、Test setup）を確かめた。トレイと接続中の画面は Phase 5 で確かめる
+  - [x] Phase 4: 消し忘れの対策（自動切断、起動時、終了時、二重起動）
+    - 実際に動くかは Phase 5 で確かめる。自動切断は環境変数 `VOD_TEST_AUTO_DISCONNECT_SECS` で秒にできる
+  - [ ] [Windows] Phase 5: sx360 で本物の VPS を使って確かめる（VPS を作る前と出口ノードを切り替える前にユーザーに確認する）
+  - [ ] Phase 6: README（英語）とアプリの中の初回の案内を仕上げる。ビルドの手順を CLAUDE.md に書く
+  - [ ] [Windows] Phase 7: GitHub Actions でインストーラをビルドして下書きの Release を作り、sx360 で README だけを見て入れて使う。問題が無ければ公開する（公開はユーザーに確認する）
+
 ## コア処理（試作 jp-exit からの移植）
 
 - [ ] Vultr の API の処理: リージョンの一覧（国ごとにまとめる）、プランの選択（そのリージョンで一番安い IPv4 付き）、VPS の作成・一覧・削除
