@@ -128,6 +128,39 @@ Step 1 で絞った候補で、次だけを持つ最小のアプリを作り、s
 
 - 試作は **Tauri 2 だけで作る**。Step 2 の 4 項目のどれかが Tauri でうまくいかない（とくに WSL からの Windows のビルド、macOS のメニューバー）ときに、Electron で同じ試作を作って比べる。
 
+### Step 2: Tauri 2 の試作（2026-11-16〜。sx360 は済み、m1 は未）
+
+試作は `poc/tauri/`（Tauri 2.12、画面は Vite + TypeScript、雛形は `create-tauri-app` 4.7.5 の `vanilla-ts`）。Rust 側は `src-tauri/src/` の `tailscale.rs`（CLI）、`secrets.rs`（`keyring` 4.2.0 の既定の `v1` 機能。Windows は資格情報マネージャー、macOS はキーチェーン）、`vultr.rs`（`reqwest` 0.13 の `native-tls`。Windows は SChannel、macOS は Security.framework を使うので、クロスビルドで C のライブラリが要らない）、`lib.rs`（トレイ、窓を閉じてもトレイに残す、macOS は `ActivationPolicy::Accessory`）。
+
+**sx360 の WSL に入れたもの（2026-11-16、ユーザーの了承済み）**
+
+- `rustup update stable` で Rust 1.83.0 → 1.100.0、ターゲット `x86_64-pc-windows-msvc`
+- `cargo install --locked cargo-xwin`（0.23.1）
+- apt: `nsis`、`lld`、`llvm`、`clang`、`libayatana-appindicator3-dev`（最後のものは、トレイを使うアプリのクロスビルドで tauri-cli が Linux のトレイ用ライブラリを探して止まる（`Can't detect any appindicator library`）ので入れた）
+
+**WSL から Windows 版をビルドする手順**
+
+```bash
+cd poc/tauri
+npm install
+npm run tauri build -- --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
+# → src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/VPN on Demand PoC_0.1.0_x64-setup.exe
+```
+
+- 初回は約 6 分（Windows の SDK と CRT のダウンロードを含む）、2 回目は約 2 分。リンクで `LNK4099`（MS の CRT のデバッグ情報が無い）の警告が大量に出るが、害はない
+- インストーラ（NSIS）は 2.06 MiB、exe 単体は 6.2 MiB。署名はされない（Windows のホストでないと既定の署名は使えないと tauri-cli が警告する）
+
+**結果**
+
+| 項目 | sx360（Windows 11） | m1（macOS） |
+|---|---|---|
+| WSL からのビルド | ◎ できた（上の手順） | — |
+| Tailscale の CLI で `status --json` を読む | ◎ できた（ホスト名、DNS 名、tailnet、出口ノードの有無、選べる出口ノード） | 未 |
+| トレイ / メニューバー | ◎ できた（ユーザーが確かめた。メニューから各画面を開ける、窓を閉じてもトレイに残る） | 未 |
+| 資格情報ストアへの保存と読み戻し | ◎ できた（ユーザーが確かめた。起動し直しても読み戻せる、資格情報マネージャーに `vpn-on-demand-poc` の項目がある） | 未 |
+| Vultr の `GET /v2/regions` を国ごとに | ◎ できた（ユーザーが確かめた。既定は日本、米国は都市を 9 つから選べる）。応答の形は curl で確かめた（33 リージョン、20 か国。米国 9、インド 3、日本 2、英国 2、オーストラリア 2） | 未 |
+| 署名なしのインストール | ◎ 入れられた（ユーザーが確かめた。Mark of the Web を付けたインストーラで SmartScreen を通した） | 未（Gatekeeper） |
+
 **出典（2026-11-16 に参照）**
 
 - 最新版: crates.io（`tauri`、`tauri-plugin-shell`、`tray-icon`、`keyring`、`keyring-core`、`windows-native-keyring-store`、`apple-native-keyring-store`）、registry.npmjs.org（`electron`）、GitHub の wailsapp/wails の Releases、pub.dev（`tray_manager`、`flutter_secure_storage`）、nuget.org（`Avalonia`）

@@ -6,7 +6,12 @@
   - 決定: 2026-11-16 にユーザーが Tauri 2（Rust + Web の画面）に決めた。Step 2 の試作で、WSL からの Windows のビルドと macOS のメニューバーを確かめる
   - [x] Step 1: 候補を机上で比べる（トレイ、資格情報ストア、外部コマンドと HTTP、ビルド、配布、保守、書きやすさ）
     - 2026-11-16: Tauri 2 がいちばん合う、Electron が次点。Wails v3、Flutter、Avalonia は見送る（プランの「調査結果」）
-  - [ ] Step 2: Tauri 2 で最小のアプリを作り（だめな項目があれば Electron でも作って比べる）、sx360（Windows）と m1（macOS）で動かす（VPS は作らない）
+  - [~] Step 2: Tauri 2 で最小のアプリを作り（だめな項目があれば Electron でも作って比べる）、sx360（Windows）と m1（macOS）で動かす（VPS は作らない）
+    - 試作は `poc/tauri/`。結果はプランの「Step 2: Tauri 2 の試作」
+    - [x] [Windows] sx360 で確かめる（WSL からのビルド、Tailscale の状態、トレイ、資格情報ストア、リージョン、署名なしのインストール）
+      - 2026-11-16: 全部できた。WSL から `cargo-xwin` と NSIS でインストーラを作れた
+    - [ ] [macOS] m1 で確かめる（m1 の Claude Code で。Xcode の Command Line Tools、Rust、Node.js を入れる前にユーザーに確認する）
+      - m1 の Tailscale の種類（App Store 版 / スタンドアロン版）と CLI の場所も確かめる
   - [ ] Step 3: 試作の結果から、ディレクトリ構成とビルドの手順を CLAUDE.md に書き、TODO.md のタスクを Tauri に合わせて直す
 - [ ] 開発環境を作る（選んだフレームワークのツールチェーンを sx360 の Windows / WSL と m1 に入れる）
   - 依存: 「技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める」
@@ -28,6 +33,8 @@
 
 ## 画面
 
+- [ ] 画面の言語を英語にする（メニュー、ボタン、メッセージ、エラー。Rust 側から画面に返す文言も）
+  - 決定: 2026-11-16 にユーザーが英語にすると決めた。試作（`poc/tauri/`）は日本語のまま
 - [ ] メイン画面: 国（と都市）を選んで接続・切断。状態、外の IP アドレスと国、接続してからの時間と概算の料金を出す
 - [ ] 設定画面: Vultr の API キーと Tailscale のキーを入力し、OS の資格情報ストアに保存する
   - 保存したキーは伏せて表示する。「接続を確かめる」ボタンで、キーが使えるか（Vultr の API が通るか、Tailscale が動いているか）を確かめる
