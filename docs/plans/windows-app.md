@@ -128,3 +128,27 @@ macOS（m1）の確認は後回しにする。コードは macOS でも動くよ
 - 単体テスト 23 件（偽物を使った接続・切断・異常系 13 件を含む）。`cargo clippy` の警告なし
 - WSL から Windows 版をビルドし（インストーラ 2.27 MiB）、sx360 で exe を起動して、キーが無いときに設定画面と案内が出ること、メイン画面、Test setup（Tailscale は ✓、キーは未設定）を確かめた。画面の操作と撮影は PowerShell の UI Automation と PrintWindow で行った（ほかの窓が写らない）
 - 自動切断の時間は、環境変数 `VOD_TEST_AUTO_DISCONNECT_SECS`（秒）で短くできる（テスト用）
+
+### Phase 5（2026-11-17、sx360）
+
+ユーザーが tailnet のポリシーに `tagOwners`（`tag:vpn-on-demand`）と `autoApprovers.exitNode` を足し、タグ付きの Reusable + Ephemeral の auth key を作り、Vultr の API キーの Access Control を全部許可にしてから、アプリの Settings に 2 つのキーを入れた。Test setup は 3 つとも ✓。VPS は 5 回作り、毎回、終わった後に Vultr の API で 0 台になったことを確かめた（この試験の費用は約 $0.06）。
+
+| 確かめたこと | 結果 |
+|---|---|
+| 接続: VPS の作成（nrt、vc2-1c-1gb、ラベル `vpn-on-demand-nrt`、タグ `vpn-on-demand`）→ tailnet への参加 → 自動承認 → 出口の切り替え → 外の IP アドレスが JP | ◎（作ってから Connected まで 3〜5 分） |
+| 切断: 出口を外す → VPS を消す（トレイのメニューから） | ◎ |
+| トレイ: アイコンの色（灰 / 黄 / 緑）、メニュー（Connect / Disconnect / Quit） | ◎ |
+| 終了の確認の画面: 「Quit and keep it running」→ 起動し直すと Connected – Tokyo を引き継ぐ | ◎ |
+| アプリの外（Tailscale のメニュー）で出口を外す → 1 分以内に「A server is still running」と Delete it / Use it が出る → Delete it で消える | ◎ |
+| 自動切断（`VOD_TEST_AUTO_DISCONNECT_SECS=300`）: 10 分前の通知、5 分後に自動で切断して VPS を消し、通知 | ◎ |
+| 終了の確認の画面: 「Delete the server and quit」で VPS を消してから終了 | ◎ |
+
+見つけて直したこと:
+
+- **消した VPS の Ephemeral ノードが、数分のあいだ Tailscale で「オンライン」のまま残る**（同じホスト名 `vpn-on-demand-nrt` で）。同じ国にすぐ再接続すると、古いノードを新しい VPS と取り違え、つながらない出口に切り替えるおそれがあった。`tailscale status --json` のピアの `Created`（tailnet に参加した時刻）を読み、VPS の作成時刻（Vultr の `date_created`）より前に参加したノードは無視するようにした（`MeshStatus::peer`）。単体テストを 2 件足して 25 件
+- 開発用に、リポジトリ直下に `.gitignore`（`.env` を除外）と `.env.example`（`VULTR_API_KEY`）を足した。`.env` はユーザーが値を入れ、VPS が消えたことを WSL から API で確かめるのに使った（値は表示していない）
+
+気づいたこと（Phase 6 以降で扱う）:
+
+- 自動切断の通知の文面は設定の時間（「after 4 h」）を出すので、テスト用に秒へ縮めたときは実際の時間と合わない（テストのときだけの問題なので、そのままにする）
+- 消した VPS のノードは、Ephemeral なので Tailscale が後で自動で消す。アプリは何もしなくてよい

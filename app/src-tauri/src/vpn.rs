@@ -41,6 +41,8 @@ pub struct Peer {
     pub exit_node: bool,
     /// This peer can be used as an exit node (it advertises one and it is approved).
     pub exit_node_option: bool,
+    /// When the node joined the tailnet (RFC 3339, UTC), if known.
+    pub created: String,
 }
 
 impl Peer {
@@ -78,16 +80,38 @@ impl MeshStatus {
     }
 
     /// The peer for a hostname. A deleted ephemeral node with the same name can linger for a
-    /// while, so prefer the one that is online.
-    pub fn peer(&self, host_name: &str) -> Option<&Peer> {
+    /// while and even still look online, so skip nodes that joined before `server_created`
+    /// (they belong to an earlier server) and prefer the one that is online.
+    pub fn peer(&self, host_name: &str, server_created: &str) -> Option<&Peer> {
+        let since = utc_seconds(server_created);
         let mut found: Vec<&Peer> = self
             .peers
             .iter()
             .filter(|p| p.host_name == host_name)
+            .filter(|p| match (since.as_deref(), utc_seconds(&p.created)) {
+                (Some(since), Some(joined)) => joined.as_str() >= since,
+                _ => true,
+            })
             .collect();
         found.sort_by_key(|p| (!p.online, !p.exit_node_option));
         found.into_iter().next()
     }
+}
+
+/// `YYYY-MM-DDTHH:MM:SS` of a UTC RFC 3339 time (Vultr: `+00:00`, Tailscale: `Z`), which
+/// compares correctly as a string. None for anything else.
+fn utc_seconds(t: &str) -> Option<String> {
+    let utc = t.ends_with('Z') || t.ends_with("+00:00");
+    let head = t.get(..19)?;
+    let ok = utc
+        && head.len() == 19
+        && head.char_indices().all(|(i, c)| match i {
+            4 | 7 => c == '-',
+            10 => c == 'T',
+            13 | 16 => c == ':',
+            _ => c.is_ascii_digit(),
+        });
+    ok.then(|| head.to_string())
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -315,7 +339,10 @@ impl<C: Cloud, M: Mesh, P: Probe> Vpn<C, M, P> {
         loop {
             check_cancel(cancel)?;
             let st = self.mesh_running().await?;
-            if st.peer(&host_name).is_some_and(|p| p.online) {
+            if st
+                .peer(&host_name, &server.created)
+                .is_some_and(|p| p.online)
+            {
                 break;
             }
             if start.elapsed() > self.timing.online_timeout {
@@ -337,7 +364,7 @@ impl<C: Cloud, M: Mesh, P: Probe> Vpn<C, M, P> {
             check_cancel(cancel)?;
             let st = self.mesh_running().await?;
             if let Some(p) = st
-                .peer(&host_name)
+                .peer(&host_name, &server.created)
                 .filter(|p| p.online && p.exit_node_option)
             {
                 break p.clone();
@@ -555,6 +582,7 @@ mod tests {
                     online: joined,
                     exit_node: st.exit_ip.as_deref() == Some(ip.as_str()),
                     exit_node_option: approved,
+                    created: "2026-11-16T00:01:00Z".into(),
                 });
             }
             if st.foreign_exit {
@@ -846,8 +874,46 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            st.peer("vpn-on-demand-nrt").unwrap().ipv4(),
+            st.peer("vpn-on-demand-nrt", "").unwrap().ipv4(),
             Some("100.2.2.2")
         );
+    }
+
+    #[test]
+    fn skips_node_of_an_earlier_server_even_if_online() {
+        // Seen on sx360: right after a server is deleted, its ephemeral node still shows online.
+        let st = MeshStatus {
+            peers: vec![Peer {
+                host_name: "vpn-on-demand-nrt".into(),
+                ips: vec!["100.1.1.1".into()],
+                online: true,
+                exit_node_option: true,
+                created: "2026-11-18T03:03:47.761338815Z".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let new_server = "2026-11-18T03:20:00+00:00";
+        assert!(st.peer("vpn-on-demand-nrt", new_server).is_none());
+        let old_server = "2026-11-18T03:02:04+00:00";
+        assert_eq!(
+            st.peer("vpn-on-demand-nrt", old_server).unwrap().ipv4(),
+            Some("100.1.1.1")
+        );
+    }
+
+    #[test]
+    fn reads_utc_times() {
+        assert_eq!(
+            utc_seconds("2026-11-18T03:02:04+00:00").as_deref(),
+            Some("2026-11-18T03:02:04")
+        );
+        assert_eq!(
+            utc_seconds("2026-11-18T03:03:47.7Z").as_deref(),
+            Some("2026-11-18T03:03:47")
+        );
+        assert_eq!(utc_seconds("2026-11-18T03:02:04+09:00"), None);
+        assert_eq!(utc_seconds("0001-01-01"), None);
+        assert_eq!(utc_seconds(""), None);
     }
 }

@@ -85,6 +85,7 @@ fn peer(v: &Value) -> Peer {
         online: b(v, "Online"),
         exit_node: b(v, "ExitNode"),
         exit_node_option: b(v, "ExitNodeOption"),
+        created: s(v, "Created"),
     }
 }
 
@@ -179,7 +180,8 @@ mod tests {
             "Peer": {
                 "k1": {"HostName": "vpn-on-demand-nrt", "DNSName": "vpn-on-demand-nrt.ts.net.",
                        "TailscaleIPs": ["100.64.0.5", "fd7a::5"], "Online": true,
-                       "ExitNode": true, "ExitNodeOption": true}
+                       "ExitNode": true, "ExitNodeOption": true,
+                       "Created": "2026-11-18T03:03:47.761338815Z"}
             }
         });
         let st = parse_status(&j);
@@ -190,5 +192,6 @@ mod tests {
         let p = &st.peers[0];
         assert!(p.online && p.exit_node && p.exit_node_option);
         assert_eq!(p.ips[0], "100.64.0.5");
+        assert_eq!(p.created, "2026-11-18T03:03:47.761338815Z");
     }
 }
