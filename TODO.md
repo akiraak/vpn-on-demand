@@ -28,11 +28,14 @@
 
 ## 接続の速さ
 
-- [ ] 接続までの時間を速くする方法を探す（根本的な技術の見直しも含める）
-  - 今は「Connect」を押してから Connected まで 3〜5 分（2026-11-17 に sx360 で確かめた。[plan](docs/plans/archive/windows-app.md) の Phase 5）。VPS の作成と起動、cloud-init で Tailscale を入れて参加するまでに約 2 分かかる
-  - まず、どの段階に何秒かかっているかを測る
-  - 今の方式の中での改善（Tailscale を入れたスナップショットから作る、cloud-init を短くする、待ちの間隔を詰めるなど）と、方式そのものの見直し（VPS の事業者、Tailscale を使わない経路など）の両方を比べる。課金を止めることを最優先にする方針（CLAUDE.md の「設計の方針」）は変えない
+- [ ] 接続までの時間を速くする方法を探す（根本的な技術の見直しも含める） [plan](docs/plans/connect-speed.md)
+  - 今は「Connect」を押してから Connected まで 3〜5 分（2026-11-17 に sx360 で確かめた。[plan](docs/plans/archive/windows-app.md) の Phase 5）。試作では VPS を作ってから Tailscale に参加するまで約 2 分だった
+  - 課金を止めることを最優先にする方針（CLAUDE.md の「設計の方針」）は変えない
   - 関連: 接続中の画面（タイムライン）は「デザインを改善する」で作った（2026-11-18 に完了。[plan](docs/plans/archive/design.md)）
+  - [ ] Phase 1: どこに何秒かかっているかを測る（VPS を作るので、測る前にユーザーに確認する）
+  - [ ] Phase 2: 今の方式の中での改善を試す（Tailscale の入れ方、スナップショット、OS とプラン、待ち方）
+  - [ ] Phase 3: 方式そのものの見直しを机上で調べる（ほかの事業者、止めておける VM、Tailscale を使わない経路）
+  - [ ] Phase 4: ユーザーと方式を決めて作り、測って確かめる
 
 ## 消し忘れの対策（課金）
 
