@@ -59,6 +59,7 @@
   - macOS: `/usr/local/bin/tailscale`（スタンドアロン版で CLI のランチャーを入れた場合）→ `/Applications/Tailscale.app/Contents/MacOS/Tailscale`（App Store 版はここ）の順に探す
   - LocalAPI は内部の API で文書化されていないので使わない
 - **専用の VPN クライアントやドライバは入れない。** 通信の経路は Tailscale に任せる。
+- **Windows 版はコード署名をしない**（2026-11-18 に決めた）。SmartScreen の警告の越え方を README で案内する。
 
 ## 秘密情報
 
@@ -70,8 +71,34 @@
 
 ## 開発環境
 
-- Claude Code は sx360（Windows 11 + WSL2）の WSL で動く。Windows 版のビルドと動作確認は Windows 側で行う必要があるかもしれない（フレームワークによる）。WSL から Windows のコマンドを呼ぶときは `cd /mnt/c` してから `powershell.exe` を使う（詳しくは `~/pc-manager/CLAUDE.md` の「Windows ホストでの操作方法」）。
+- Claude Code は sx360（Windows 11 + WSL2）の WSL で動く。Windows 版は WSL からクロスビルドし（下の「ビルドとテスト」）、動作確認は sx360 の Windows 側で行う。WSL から Windows のコマンドを呼ぶときは `cd /mnt/c` してから `powershell.exe` を使う（詳しくは `~/pc-manager/CLAUDE.md` の「Windows ホストでの操作方法」）。
 - macOS 版のビルドと動作確認は m1 で行う。m1 での作業は m1 の Claude Code で行う。
+
+### ディレクトリ構成
+
+- `app/`: アプリ（Tauri 2）
+  - `app/src-tauri/src/`: 処理（Rust）。`lib.rs`（アプリの状態、画面から呼ぶコマンド、自動切断などのタイマー）、`vpn.rs`（接続・切断の流れ。Vultr と Tailscale はトレイトの後ろにあり、偽物でテストする）、`vultr.rs`（Vultr API v2）、`tailscale.rs`（Tailscale の CLI）、`cloud_init.rs`（VPS の user data）、`secrets.rs`（資格情報ストア）、`settings.rs`（秘密でない設定の JSON）、`tray.rs`（トレイ / メニューバー）
+  - `app/index.html`、`app/src/main.ts`、`app/src/styles.css`: 画面（Vite + TypeScript、フレームワークなし）。表示と操作だけで、状態は Rust から `state` イベントで受け取る
+  - `app/src-tauri/icons/`: アイコン。元の絵は `icon.svg` と `tray/*.svg`。PNG と ICO は SVG から作る（作り方は `docs/plans/archive/design.md` の「進み具合」）
+- `docs/plans/`: プラン。済んだものは `docs/plans/archive/`
+
+### ビルドとテスト（sx360 の WSL）
+
+WSL に入っているもの: Rust（stable、ターゲット `x86_64-pc-windows-msvc`）、Node.js 22、`cargo-xwin`、apt の `nsis`、`lld`、`llvm`、`clang`、`libayatana-appindicator3-dev`（最後のものは、tauri-cli が Linux のトレイ用ライブラリを探して止まるのを避けるため）。
+
+```bash
+cd app
+npm install
+npm run build                          # 画面の型チェックとビルド
+(cd src-tauri && cargo test)           # 単体テスト
+(cd src-tauri && cargo clippy)
+# Windows 版のインストーラ（NSIS、署名なし）
+npm run tauri build -- --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
+# → src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/VPN on Demand_<version>_x64-setup.exe
+```
+
+- アイコンのファイルを替えたときは、`touch src-tauri/build.rs` してからビルドする（しないと exe のアイコンが古いまま残る）
+- sx360 で確かめるときは、インストーラを Windows の `%TEMP%` に写して `/S` で入れる（ユーザー単位で `%LOCALAPPDATA%\VPN on Demand\` に入る。管理者の権限は要らない）。接続中でないことを確かめてから、動いているアプリを止めて入れ直す
 
 ## 注意が必要な操作
 

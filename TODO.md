@@ -7,37 +7,24 @@
   - [x] Step 1: 候補を机上で比べる（トレイ、資格情報ストア、外部コマンドと HTTP、ビルド、配布、保守、書きやすさ）
     - 2026-11-16: Tauri 2 がいちばん合う、Electron が次点。Wails v3、Flutter、Avalonia は見送る（プランの「調査結果」）
   - [~] Step 2: Tauri 2 で最小のアプリを作り（だめな項目があれば Electron でも作って比べる）、sx360（Windows）と m1（macOS）で動かす（VPS は作らない）
-    - 試作は `poc/tauri/`。結果はプランの「Step 2: Tauri 2 の試作」
+    - 試作は `poc/tauri/` で作り、2026-11-17 に `app/` に移した。結果はプランの「Step 2: Tauri 2 の試作」
     - [x] [Windows] sx360 で確かめる（WSL からのビルド、Tailscale の状態、トレイ、資格情報ストア、リージョン、署名なしのインストール）
       - 2026-11-16: 全部できた。WSL から `cargo-xwin` と NSIS でインストーラを作れた
     - [ ] [macOS] m1 で確かめる（m1 の Claude Code で。Xcode の Command Line Tools、Rust、Node.js を入れる前にユーザーに確認する）
       - m1 の Tailscale の種類（App Store 版 / スタンドアロン版）と CLI の場所も確かめる
-  - [ ] Step 3: 試作の結果から、ディレクトリ構成とビルドの手順を CLAUDE.md に書き、TODO.md のタスクを Tauri に合わせて直す
-- [ ] 開発環境を作る（選んだフレームワークのツールチェーンを sx360 の Windows / WSL と m1 に入れる）
-  - 依存: 「技術選定: Windows と macOS のアプリを 1 つのコードベースで作るフレームワークを決める」
-  - WSL からビルドできるか、Windows 側でビルドするかを確かめる
-- [ ] Tailscale の操作方法を調べる: Windows と macOS（App Store 版とスタンドアロン版）で、アプリから CLI（`tailscale set --exit-node`、`tailscale status --json`）を呼べるか、LocalAPI を使う方がよいか
-  - Tailscale が入っていない・ログインしていない・ほかの出口ノードを使っているときの見分け方も調べる
+  - [x] Step 3: 試作の結果から、ディレクトリ構成とビルドの手順を CLAUDE.md に書き、TODO.md のタスクを Tauri に合わせて直す
+    - 2026-11-18: CLAUDE.md の「開発環境」に書いた。macOS のビルドの手順は m1 で確かめてから足す
+- [ ] [macOS] Tailscale の CLI をアプリから呼べるかを確かめる（App Store 版とスタンドアロン版）
+  - Windows は済んだ（アプリが CLI で動いている。LocalAPI は使わないと CLAUDE.md に決めてある）
+  - ほかの出口ノードを使っているときの扱いも見る
 
 ## Windows 版の仕上げ
 
-- [~] デザインを改善する（アプリのアイコン、画面の見た目、初回の案内） [plan](docs/plans/design.md)
-  - 派生元: 「Windows 版を完成させる」（2026-11-17 に完了。[plan](docs/plans/archive/windows-app.md)）
-  - [x] Phase 0: デザイン例を 3 案作って見比べ、ユーザーが決める
-    - 2026-11-18: C（経路を見せる）に決めた
-  - [x] Phase 1: アイコン（アプリ、トレイ）
-  - [x] Phase 2: Connect タブ
-  - [x] Phase 3: Settings タブと初回の案内
-  - [~] [Windows] Phase 4: sx360 でビルドして確かめる
-    - 2026-11-18: 画面と窓のアイコンは確かめた。トレイ・タスクバー・スタートメニューの見た目はユーザーに見てもらう
-  - [x] Phase 5: 出口の場所の選び方を小さくする（A: 1 行にまとめ、Change で一覧を開く）
-    - 2026-11-18: 4 案から A に決めた。窓は 560 × 540 にした
 - [ ] ドキュメントを整備する（README を読めば、だれでもインストールして使える状態にする）
   - 派生元: 「Windows 版を完成させる」（2026-11-17 に完了。[plan](docs/plans/archive/windows-app.md)）
   - README（英語）: 何ができるか、用意するもの（Vultr、Tailscale）、tailnet のポリシー、キーの作り方、インストール（SmartScreen の警告の越え方）、使い方、費用、困ったとき、片付け（アンインストール、キーの削除）
-  - 開発者向け: ビルドの手順（WSL から `cargo-xwin` と NSIS）を CLAUDE.md の「開発環境」に書く
   - 配布: GitHub Actions でインストーラをビルドして下書きの Release を作り、sx360 で試作と開発版をアンインストールしてから、README だけを見て入れて使う。問題が無ければ公開する（Release の公開はユーザーに確認する）
-  - 関連: 「Step 3: 試作の結果から、ディレクトリ構成とビルドの手順を CLAUDE.md に書き、TODO.md のタスクを Tauri に合わせて直す」
+  - 開発者向けのビルドの手順は CLAUDE.md の「開発環境」に書いた（2026-11-18）。README には要点だけ書いてリンクする
 
 ## 接続の速さ
 
@@ -45,7 +32,7 @@
   - 今は「Connect」を押してから Connected まで 3〜5 分（2026-11-17 に sx360 で確かめた。[plan](docs/plans/archive/windows-app.md) の Phase 5）。VPS の作成と起動、cloud-init で Tailscale を入れて参加するまでに約 2 分かかる
   - まず、どの段階に何秒かかっているかを測る
   - 今の方式の中での改善（Tailscale を入れたスナップショットから作る、cloud-init を短くする、待ちの間隔を詰めるなど）と、方式そのものの見直し（VPS の事業者、Tailscale を使わない経路など）の両方を比べる。課金を止めることを最優先にする方針（CLAUDE.md の「設計の方針」）は変えない
-  - 関連: 「デザインを改善する（アプリのアイコン、画面の見た目、初回の案内）」（接続中の画面の見せ方）
+  - 関連: 接続中の画面（タイムライン）は「デザインを改善する」で作った（2026-11-18 に完了。[plan](docs/plans/archive/design.md)）
 
 ## 消し忘れの対策（課金）
 
@@ -61,7 +48,6 @@
 
 ## 配布
 
-- [ ] [Windows] コード署名をするか決める（今は署名なしで、SmartScreen の警告の越え方を README で案内する）
 - [ ] [macOS] アプリを作る。署名と公証（notarization）をするか決める（しないと Gatekeeper で開けない）
 - [ ] 自動更新を入れるか決める
 
