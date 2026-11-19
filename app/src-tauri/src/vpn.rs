@@ -190,6 +190,7 @@ impl Probe for IpInfoProbe {
     async fn public_ip(&self) -> Result<IpInfo> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(15))
+            .connect_timeout(Duration::from_secs(5))
             .pool_max_idle_per_host(0)
             .build()
             .map_err(|e| VpnError::Other(e.to_string()))?;
@@ -213,15 +214,19 @@ pub struct Timing {
     pub online_timeout: Duration,
     pub approval_timeout: Duration,
     pub retry_delay: Duration,
+    /// Between public-IP checks right after switching (the first ones often fail).
+    pub ip_retry_delay: Duration,
 }
 
 impl Default for Timing {
     fn default() -> Self {
         Self {
-            poll: Duration::from_secs(5),
+            // `tailscale status` is cheap; checking often notices the new server sooner.
+            poll: Duration::from_secs(2),
             online_timeout: Duration::from_secs(10 * 60),
             approval_timeout: Duration::from_secs(15 * 60),
             retry_delay: Duration::from_secs(3),
+            ip_retry_delay: Duration::from_secs(1),
         }
     }
 }
@@ -405,12 +410,13 @@ impl<C: Cloud, M: Mesh, P: Probe> Vpn<C, M, P> {
 
     /// The traffic may drop for a few seconds right after switching.
     pub async fn public_ip_with_retry(&self) -> Option<IpInfo> {
-        for i in 0..4 {
+        const TRIES: u32 = 8;
+        for i in 0..TRIES {
             if let Ok(ip) = self.probe.public_ip().await {
                 return Some(ip);
             }
-            if i < 3 {
-                tokio::time::sleep(self.timing.retry_delay).await;
+            if i + 1 < TRIES {
+                tokio::time::sleep(self.timing.ip_retry_delay).await;
             }
         }
         None
@@ -630,6 +636,7 @@ mod tests {
             online_timeout: Duration::from_millis(200),
             approval_timeout: Duration::from_millis(200),
             retry_delay: Duration::from_millis(1),
+            ip_retry_delay: Duration::from_millis(1),
         }
     }
 

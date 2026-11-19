@@ -101,6 +101,9 @@ pub struct Vultr {
     http: reqwest::Client,
     key: String,
     plans: Mutex<Option<Vec<Plan>>>,
+    os_name: String,
+    /// A fixed plan instead of [`pick_plan`] (the timing tool compares plans).
+    plan: Option<String>,
     /// How many times to retry when the network is unreachable, and how long to wait between.
     retries: u32,
     retry_delay: Duration,
@@ -109,6 +112,9 @@ pub struct Vultr {
 fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
+        // Right after the exit node is switched, new connections can hang until the OS gives up
+        // (about 30 s). Fail fast instead and let `call` retry.
+        .connect_timeout(Duration::from_secs(5))
         // The route changes when the exit node is switched; don't reuse old connections.
         .pool_max_idle_per_host(0)
         .build()
@@ -165,8 +171,10 @@ impl Vultr {
             http: http_client(),
             key: key.trim().to_string(),
             plans: Mutex::new(None),
-            retries: 8,
-            retry_delay: Duration::from_secs(4),
+            os_name: OS_NAME.to_string(),
+            plan: None,
+            retries: 10,
+            retry_delay: Duration::from_secs(1),
         })
     }
 
@@ -209,7 +217,10 @@ impl Vultr {
                         && (e.is_connect() || e.is_timeout() || e.is_request()) =>
                 {
                     attempt += 1;
-                    tokio::time::sleep(self.retry_delay).await;
+                    // 1 s, 2 s, 3 s, then 4 s: the first retry comes soon (a connection that
+                    // hung right after switching usually works at once), and the retries still
+                    // cover about half a minute of "Network is unreachable".
+                    tokio::time::sleep(self.retry_delay * attempt.min(4)).await;
                 }
                 Err(e) => {
                     return Err(VpnError::Cloud(format!("Can't reach the Vultr API: {e}")));
@@ -240,6 +251,18 @@ impl Vultr {
         ))
     }
 
+    /// Uses another OS image (its name in `GET /os`). For the timing tool.
+    pub fn with_os(mut self, name: &str) -> Self {
+        self.os_name = name.to_string();
+        self
+    }
+
+    /// Uses this plan instead of the cheapest one. For the timing tool.
+    pub fn with_plan(mut self, id: &str) -> Self {
+        self.plan = Some(id.to_string());
+        self
+    }
+
     /// The raw `GET /instances/{id}` object (`status`, `power_status`, `server_status`, ...), or
     /// `None` if it no longer exists. Used by the timing tool.
     pub async fn instance(&self, id: &str) -> Result<Option<Value>> {
@@ -253,7 +276,7 @@ impl Vultr {
         if let Some(p) = self.plans.lock().unwrap().clone() {
             return Ok(p);
         }
-        let v = self.get("/plans?type=vc2&per_page=500").await?;
+        let v = self.get("/plans?type=all&per_page=500").await?;
         let plans: Vec<Plan> = serde_json::from_value(v.get("plans").cloned().unwrap_or(json!([])))
             .map_err(|e| VpnError::Cloud(format!("Unexpected plan list from Vultr: {e}")))?;
         *self.plans.lock().unwrap() = Some(plans.clone());
@@ -266,10 +289,10 @@ impl Vultr {
             .and_then(Value::as_array)
             .and_then(|list| {
                 list.iter()
-                    .find(|o| o.get("name").and_then(Value::as_str) == Some(OS_NAME))
+                    .find(|o| o.get("name").and_then(Value::as_str) == Some(&self.os_name))
             })
             .and_then(|o| o.get("id").and_then(Value::as_i64))
-            .ok_or_else(|| VpnError::Cloud(format!("Vultr no longer offers \"{OS_NAME}\".")))
+            .ok_or_else(|| VpnError::Cloud(format!("Vultr no longer offers \"{}\".", self.os_name)))
     }
 }
 
@@ -312,7 +335,10 @@ impl Cloud for Vultr {
     }
 
     async fn create_server(&self, region: &str, hostname: &str, user_data: &str) -> Result<Server> {
-        let avail = self.get(&format!("/regions/{region}/availability")).await?;
+        // Independent lookups; in parallel to save a couple of seconds.
+        let availability = format!("/regions/{region}/availability");
+        let (avail, plans, os_id) =
+            tokio::try_join!(self.get(&availability), self.plans(), self.os_id())?;
         let available: Vec<String> = avail
             .get("available_plans")
             .and_then(Value::as_array)
@@ -323,8 +349,11 @@ impl Cloud for Vultr {
                     .collect()
             })
             .unwrap_or_default();
-        let plans = self.plans().await?;
-        let plan = pick_plan(&plans, &available, region).ok_or_else(|| {
+        let plan = match &self.plan {
+            Some(id) => plans.iter().find(|p| &p.id == id && available.contains(id)),
+            None => pick_plan(&plans, &available, region),
+        };
+        let plan = plan.ok_or_else(|| {
             VpnError::Cloud(format!(
                 "No small server plan is available in {region} right now. Try another city."
             ))
@@ -332,7 +361,7 @@ impl Cloud for Vultr {
         let body = json!({
             "region": region,
             "plan": plan.id,
-            "os_id": self.os_id().await?,
+            "os_id": os_id,
             "label": hostname,
             "hostname": hostname,
             "tags": [TAG],

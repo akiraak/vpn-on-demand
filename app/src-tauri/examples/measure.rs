@@ -6,7 +6,7 @@
 //!
 //! ```bash
 //! set -a; . ../../.env; set +a      # VULTR_API_KEY, TAILSCALE_AUTH_KEY
-//! cargo run --example measure -- nrt JP [--out DIR]
+//! cargo run --example measure -- nrt JP [--out DIR] [--os "Debian 13 x64 (trixie)"] [--plan vhp-1c-1gb-amd]
 //! cargo run --example measure -- --print-user-data   # show the script, create nothing
 //! ```
 //!
@@ -136,14 +136,17 @@ fn parse_utc(t: &str) -> Option<f64> {
 // ---------- user data with timing marks ----------
 
 /// Adds timestamp marks to the app's user data script. Works on any bash script whose first
-/// lines are `#!/bin/bash` and `set -eux`; known lines get extra marks around them.
+/// lines are `#!/bin/bash` and `set -eux`; known lines get extra marks around them: the line
+/// that installs Tailscale (it mentions the official installer, possibly as a fallback) and
+/// `tailscale up`.
 fn instrument(script: &str) -> String {
     let mut out = String::new();
+    let mut started = false;
     for line in script.lines() {
-        if line.starts_with("curl -fsSL https://tailscale.com/install.sh") {
+        if !line.starts_with('#') && line.contains("https://tailscale.com/install.sh | sh") {
             out.push_str("vod_mark install-start\nset +x -o pipefail\n");
             out.push_str(&format!(
-                "{line} 2>&1 | while IFS= read -r l; do printf '%s %s\\n' \"$(date +%T.%3N)\" \"$l\"; done | tee {VM_DIR}/install.log\n"
+                "{{ {line}; }} 2>&1 | while IFS= read -r l; do printf '%s %s\\n' \"$(date +%T.%3N)\" \"$l\"; done | tee {VM_DIR}/install.log\n"
             ));
             out.push_str("set -x +o pipefail\nvod_mark install-done\n");
             continue;
@@ -156,7 +159,9 @@ fn instrument(script: &str) -> String {
         }
         out.push_str(line);
         out.push('\n');
-        if line == "set -eux" {
+        // Only the script's own first one (heredocs inside may have their own).
+        if line == "set -eux" && !started {
+            started = true;
             out.push_str(&format!(
                 r#"mkdir -p {VM_DIR}
 vod_mark() {{ echo "$(date +%s.%3N) $1" >> {VM_DIR}/marks; }}
@@ -385,10 +390,16 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut pos = Vec::new();
     let mut out_root = PathBuf::from("measure-out");
+    let mut os: Option<String> = None;
+    let mut plan: Option<String> = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         if a == "--out" {
             out_root = PathBuf::from(it.next().expect("--out DIR"));
+        } else if a == "--os" {
+            os = Some(it.next().expect("--os NAME").clone());
+        } else if a == "--plan" {
+            plan = Some(it.next().expect("--plan ID").clone());
         } else {
             pos.push(a.clone());
         }
@@ -404,7 +415,14 @@ async fn main() {
     let country = pos.get(1).cloned().unwrap_or_else(|| "JP".into());
     let host_name = vpn::hostname_for(&region);
 
-    let vultr = Arc::new(Vultr::new(env("VULTR_API_KEY")).expect("Vultr key"));
+    let mut vultr = Vultr::new(env("VULTR_API_KEY")).expect("Vultr key");
+    if let Some(os) = &os {
+        vultr = vultr.with_os(os);
+    }
+    if let Some(plan) = &plan {
+        vultr = vultr.with_plan(plan);
+    }
+    let vultr = Arc::new(vultr);
     let auth_key = env("TAILSCALE_AUTH_KEY");
 
     // Never interfere with a real connection.
@@ -474,7 +492,14 @@ async fn main() {
         stop.clone(),
     ));
 
-    rec.add("app", format!("Connect pressed ({region})"));
+    rec.add(
+        "app",
+        format!(
+            "Connect pressed ({region}, os={}, plan={})",
+            os.as_deref().unwrap_or("default"),
+            plan.as_deref().unwrap_or("default")
+        ),
+    );
     let req = ConnectRequest {
         region: &region,
         country: &country,
@@ -536,6 +561,8 @@ async fn main() {
     std::fs::write(dir.join("timeline.txt"), &timeline).ok();
     let summary = json!({
         "region": region,
+        "os": os,
+        "plan": plan,
         "ok": result.is_ok(),
         "connect_seconds": connected_at,
         "disconnect_seconds": dis_secs,

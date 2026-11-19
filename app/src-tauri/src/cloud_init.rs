@@ -51,7 +51,38 @@ net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
 EOF
 sysctl -p /etc/sysctl.d/99-tailscale.conf
-curl -fsSL https://tailscale.com/install.sh | sh
+# Tailscale's static binaries: no apt update on first boot (about 20 s faster than install.sh).
+cat > /run/tailscale-static.sh <<'EOF'
+set -eux
+case "$(uname -m)" in
+  x86_64) arch=amd64 ;;
+  aarch64) arch=arm64 ;;
+  *) exit 1 ;;
+esac
+base=https://pkgs.tailscale.com/stable
+tgz=$(curl -fsSL "$base/?mode=json" | python3 -c 'import json, sys; print(json.load(sys.stdin)["Tarballs"][sys.argv[1]])' "$arch")
+case "$tgz" in
+  tailscale_*_"$arch".tgz) ;;
+  *) exit 1 ;;
+esac
+# On disk: /run is a small tmpfs on a 1 GB server.
+work=$(mktemp -d /var/tmp/tailscale.XXXXXX)
+cd "$work"
+curl -fsSLO "$base/$tgz"
+echo "$(curl -fsSL "$base/$tgz.sha256")  $tgz" | sha256sum -c -
+tar xzf "$tgz"
+d=${{tgz%.tgz}}
+install -m 755 "$d/tailscaled" /usr/sbin/tailscaled
+install -m 755 "$d/tailscale" /usr/bin/tailscale
+install -m 644 "$d/systemd/tailscaled.service" /etc/systemd/system/tailscaled.service
+install -m 644 "$d/systemd/tailscaled.defaults" /etc/default/tailscaled
+cd /
+rm -rf "$work"
+systemctl daemon-reload
+systemctl enable --now tailscaled
+EOF
+# If that fails (e.g. the download list changed), fall back to the official installer.
+bash /run/tailscale-static.sh || curl -fsSL https://tailscale.com/install.sh | sh
 tailscale up --auth-key='{auth_key}' --hostname={hostname} --advertise-exit-node --ssh
 if command -v ufw >/dev/null && ufw status | grep -q active; then
   ufw allow in on tailscale0
@@ -79,6 +110,27 @@ mod tests {
         assert!(s.contains("--hostname=vpn-on-demand-nrt --advertise-exit-node"));
         assert!(s.contains("net.ipv4.ip_forward = 1"));
         assert!(s.contains("ufw delete allow 22/tcp"));
+        // Static binaries first, the official installer as the fallback.
+        assert!(s.contains("sha256sum -c -"));
+        assert!(s.contains("d=${tgz%.tgz}"));
+        assert!(s.contains(
+            "bash /run/tailscale-static.sh || curl -fsSL https://tailscale.com/install.sh | sh\n"
+        ));
+    }
+
+    #[test]
+    fn script_is_valid_bash() {
+        let s = script("tskey-auth-abc123-XYZ", "vpn-on-demand-nrt").unwrap();
+        let Ok(mut child) = std::process::Command::new("bash")
+            .arg("-n")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        else {
+            return; // no bash here
+        };
+        use std::io::Write;
+        child.stdin.take().unwrap().write_all(s.as_bytes()).unwrap();
+        assert!(child.wait().unwrap().success());
     }
 
     #[test]
