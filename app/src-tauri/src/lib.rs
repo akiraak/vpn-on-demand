@@ -1,14 +1,15 @@
 //! VPN on Demand: a Vultr server as a Tailscale exit node, only while you need it.
 //! All logic lives here in Rust; the web UI only displays state and sends commands.
 
-mod cloud_init;
-mod error;
+// `pub` so that development tools (`examples/measure.rs`) can drive the same flows.
+pub mod cloud_init;
+pub mod error;
 mod secrets;
 mod settings;
-mod tailscale;
+pub mod tailscale;
 mod tray;
-mod vpn;
-mod vultr;
+pub mod vpn;
+pub mod vultr;
 
 use error::VpnError;
 use serde::Serialize;

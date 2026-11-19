@@ -240,6 +240,15 @@ impl Vultr {
         ))
     }
 
+    /// The raw `GET /instances/{id}` object (`status`, `power_status`, `server_status`, ...), or
+    /// `None` if it no longer exists. Used by the timing tool.
+    pub async fn instance(&self, id: &str) -> Result<Option<Value>> {
+        Ok(self
+            .call(reqwest::Method::GET, &format!("/instances/{id}"), None)
+            .await?
+            .and_then(|v| v.get("instance").cloned()))
+    }
+
     async fn plans(&self) -> Result<Vec<Plan>> {
         if let Some(p) = self.plans.lock().unwrap().clone() {
             return Ok(p);

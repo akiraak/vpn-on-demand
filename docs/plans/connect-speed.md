@@ -40,6 +40,48 @@
 - 東京（nrt）で 3 回測る。ほかの国も 1 回（例: ロサンゼルス）測り、国で差があるかを見る
 - **VPS を作るので、測る前にユーザーに確認する**（1 回で約 $0.01、合わせて $0.05 ほど）。毎回、終わったら VPS が消えたことを確かめる。出口ノードの切り替えも起きるので、そのことも合わせて確認する
 
+#### 測り方（2026-11-18 に決めた）
+
+アプリに記録を足して Windows で手で押す代わりに、**計測用のプログラム `app/src-tauri/examples/measure.rs`** を作り、WSL から動かす。Phase 2 で 1 つ変えるたびに測り直すので、何度でも同じ条件で測れるようにする。
+
+- アプリと同じ `Vpn::connect` / `disconnect` を、本物の Vultr と Tailscale（WSL から Windows の `tailscale.exe`）で動かす。待ち方（5 秒ごとの確認など）もアプリと同じ
+- 並行して 2 秒ごとに Vultr の `GET /instances/{id}`（`status`、`power_status`、`server_status`）と `tailscale status` のピアを読み、変わった時刻を記録する。ピアの `Created` も記録する
+- VPS の中の内訳: 計測のときだけ、user data に時刻を書く行を足す（`/var/lib/vod-measure/marks` に、スクリプトの開始、カーネルの起動時刻、Tailscale のインストールの前後、`tailscale up` の前後、終わり。`set -x` の各行にも時刻を付ける）。cloud-init が終わったら `cloud-init analyze`、`systemd-analyze`、apt の履歴、apt-daily / unattended-upgrades のジャーナル、cloud-init の出力を集め、VPS の Tailscale の IP の 8099 番で配る。プログラムはこれを読んで記録に混ぜる
+  - Tailscale SSH を使わないので、tailnet のポリシーの SSH の規則を変えなくてよい。PC から `tag:vpn-on-demand` の 8099 番へ届くこと（今のポリシーが全許可なら届く）だけが要る
+  - `set -x` の出力には auth key が出るので、VPS の上とプログラムの両方で `tskey-...` を伏せてから保存する
+- 終わったら必ず切断し、Vultr にアプリのタグの VPS が残っていないことを確かめる。Ctrl-C でも切断して消す。始める前にアプリのタグの VPS があれば、本物の接続を邪魔しないように止める
+- キーは `.env` の `VULTR_API_KEY` と `TAILSCALE_AUTH_KEY`（変数名は `.env.example`）。結果は `app/src-tauri/measure-out/<region>-<時刻>/`（Git 管理外）に `timeline.txt`、`events.json`、VPS の中のファイルを保存し、数字はこのプランの「結果」に書く
+- 実行: `cd app/src-tauri && set -a && . ../../.env && set +a && cargo run --example measure -- nrt JP`（`--print-user-data` で、何も作らずに user data を表示する）
+
+#### 結果（2026-11-18、vc2-1c-1gb、Ubuntu 24.04、sx360 の WSL から）
+
+**接続は 100〜125 秒（東京の中央値 110 秒）。切断は約 36 秒。4 回とも VPS は残っていない。** 段階ごとの秒数（左の 3 列が東京 nrt、右端がロサンゼルス lax）:
+
+| 段階 | nrt 1 | nrt 2 | nrt 3 | lax |
+|---|---|---|---|---|
+| 確認と作成の API（プラン、空き、OS の ID、`POST /instances`） | 4.4 | 2.9 | 3.7 | 6.2 |
+| **Vultr が VM を用意して起動する**（作成の API が返ってから、カーネルが起動するまで） | 47.5 | 60.6 | 48.6 | 45.2 |
+| **起動からスクリプトの開始まで**（カーネル約 5 秒、systemd、cloud-init の init-local / init-network / modules-config） | 24.4 | 26.8 | 22.2 | 20.8 |
+| **Tailscale のインストール**（`install.sh`。`apt-get update` 約 14 秒、`apt-get install` 約 6 秒） | 24.1 | 26.8 | 25.2 | 24.8 |
+| `tailscale up` から、オンラインで出口ノードとして承認されるまで | 2.2 | 2.8 | 2.3 | 2.5 |
+| アプリが気づくまで（5 秒ごとの確認） | 0.7 | 2.8 | 0.5 | 0.1 |
+| 出口ノードの切り替え（約 0.5 秒）と IP の確認（ipinfo.io。切り替え直後に失敗して 3 秒後に再試行することがある） | 6.5 | 2.4 | 6.4 | 1.1 |
+| **合計（Connect から Connected）** | **109.8** | **125.1** | **109.0** | **100.7** |
+
+分かったこと:
+
+- **VM の用意（約 48 秒）が最大**で、アプリからは変えられない。Vultr の状態は、作成の数秒後に電源が `stopped` / `locked`（イメージを書いている）になり、約 40 秒後に `running` / `ok`。カーネルが起動するのはさらに約 10 秒後（`ok` になっても、まだ起動していない）
+- **起動からスクリプトの開始まで約 24 秒**。cloud-init の中だけで約 13 秒（init-local で Vultr のメタデータを読むのに約 3 秒、init-network、modules-config）。残りはカーネルと systemd
+- **Tailscale のインストールが約 25 秒**。うち `apt-get update` が約 14 秒（12 MB を取り、パッケージの一覧を作る）。apt のロックの待ち（unattended-upgrades）は 4 回とも起きていない。静的なバイナリにすれば数秒になる見込み
+- `autoApprovers` が効いていて、承認の待ちは無い（参加から 1〜2 秒で `ExitNodeOption`）
+- アプリ側の待ち（作成の API、5 秒ごとの確認、IP の確認）は合わせて約 10 秒
+- 国による差は小さい（lax は 101 秒）
+- **2026-11-17 の「3〜5 分」より大幅に短い。** 計測のプログラムはアプリと同じ処理なので、前回は承認の待ち（`autoApprovers` を入れる前）や、名前の同じ古いピアの扱い（その後に直した）で遅れていた可能性が高い。Phase 4 で、アプリの画面からも 1 回測って確かめる
+- **切断の約 36 秒は、Vultr の API の待ち。** `tailscale set --exit-node=` は 0.4 秒で終わるが、直後の `list_servers` が約 31 秒かかって失敗し、4 秒後の再試行で成功している（4 回とも同じ）。経路が変わった直後の TCP の接続が応答なしで止まり、OS の接続のタイムアウト（SYN の再送）まで待っていると見ている。HTTP クライアントに短い接続のタイムアウト（例: 5 秒）を付ければ、数秒になる見込み。課金を止める処理なので、Phase 2 で直す
+- 計測の不具合: 1 回目は `PS4` を `export` したため、Tailscale の `install.sh`（dash）が `PS4` を読めずにエラーを出した（インストールは成功）。2 回目から `export` しない
+
+今の方式で詰められそうなのは、Tailscale のインストール（約 20 秒）、アプリ側の待ち（約 5 秒）、起動の一部（OS イメージ次第）。VM の用意の約 48 秒は Vultr で VPS を作る限り残るので、今の方式の下限は 1 分強と見ている。数秒〜数十秒にするには、方式の見直し（Phase 3）が要る
+
 ### Phase 2: 今の方式の中での改善を試す
 
 Phase 1 の結果で、時間を使っている段階から順に試す。1 つ変えるたびに測り直す。
