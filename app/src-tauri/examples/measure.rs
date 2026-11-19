@@ -5,7 +5,8 @@
 //! server is left. **This creates a server (billed) and switches this PC's exit node.**
 //!
 //! ```bash
-//! set -a; . ../../.env; set +a      # VULTR_API_KEY, TAILSCALE_AUTH_KEY
+//! # VULTR_API_KEY, TAILSCALE_AUTH_KEY. FLY_API_TOKEN contains a space, so leave it out.
+//! set -a; . <(grep -v '^FLY_API_TOKEN=' ../../.env); set +a
 //! cargo run --example measure -- nrt JP [--out DIR] [--os "Debian 13 x64 (trixie)"] [--plan vhp-1c-1gb-amd]
 //! cargo run --example measure -- --print-user-data   # show the script, create nothing
 //! ```
@@ -380,7 +381,7 @@ async fn fetch_vm_files(ip: &str, dir: &Path, rec: &Rec, cancel: &AtomicBool) {
 
 fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| {
-        eprintln!("{name} is not set (put it in .env and `set -a; . ../../.env; set +a`).");
+        eprintln!("{name} is not set (put it in .env; see the top of this file).");
         std::process::exit(2);
     })
 }

@@ -2,6 +2,13 @@
 
 ## 2026-11-18
 
+- [x] 接続までの時間を速くする方法を探す（根本的な技術の見直しも含める） [plan](docs/plans/archive/connect-speed.md)
+  - アプリの画面で、接続が 1 分 30 秒、切断が 5 秒になった（前は接続 3〜5 分と言われていて、計測のプログラムでは 110 秒。切断 36 秒）
+  - Phase 1: 計測用のプログラム `app/src-tauri/examples/measure.rs` を作って測った。VM の用意 約 48 秒、起動からスクリプトまで 約 24 秒、Tailscale のインストール 約 25 秒、アプリ側 約 10 秒。切断の 36 秒は Vultr の API の接続の待ちだった
+  - Phase 2: Tailscale を静的なバイナリで入れる（失敗したら `install.sh`）、確認を 2 秒ごと、IP の確認の再試行を 1 秒ごと、作成前の API を並べて呼ぶ、HTTP の接続のタイムアウト 5 秒、再試行の待ちを 1→2→3→4 秒にした。OS（Debian 13、Ubuntu 26.04）を替えても速くならなかった
+  - Phase 3: VM を速く起動できるサービスと VM 以外の方法を机上で調べた。本命は Fly.io（止めておいて起動）と Tailscale の Mullvad アドオン
+  - Phase 4: Fly.io を試した（`examples/measure_fly.rs`）。suspend からの起動で約 4 秒、stop からで 7〜13 秒、作成で 18 秒。ただし Fly.io の出口（Latitude.sh の IP）では U-NEXT が見られず（TVer は見られた）、同じ日の Vultr は両方見られたので、ユーザーが Vultr のままにすると決めた
+  - 画面の所要時間の文言を「usually about 1½ minutes」「Usually 1–2 minutes」に直し、sx360 に入れた
 - [x] デザインを改善する（アプリのアイコン、画面の見た目、初回の案内） [plan](docs/plans/archive/design.md)
   - 3 案からユーザーが C（経路を見せる）を選び、アイコン、Connect（経路の絵、タイムライン、接続中のタイル）、Settings（4 つの手順のチェックリスト）、終了の確認を作り直した
   - Phase 5 で、出口の場所を 1 行にまとめ、Change で一覧を開くようにした（4 案から A）。窓は 560 × 540

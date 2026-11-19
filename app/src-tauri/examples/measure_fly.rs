@@ -12,7 +12,9 @@
 //! **This runs (billed) Machines and switches this PC's exit node.**
 //!
 //! ```bash
-//! set -a; . ../../.env; set +a      # FLY_API_TOKEN, TAILSCALE_AUTH_KEY
+//! # TAILSCALE_AUTH_KEY; FLY_API_TOKEN ("FlyV1 fm2_...") contains a space, so read it on its own.
+//! set -a; . <(grep -v '^FLY_API_TOKEN=' ../../.env); set +a
+//! export FLY_API_TOKEN="$(sed -n 's/^FLY_API_TOKEN=//p' ../../.env)"
 //! cargo run --example measure_fly -- --app <unique-app-name> [--region nrt] [--cycles 3]
 //! cargo run --example measure_fly -- --app <name> --up     # connect and leave it running
 //! cargo run --example measure_fly -- --app <name> --down   # exit node off, destroy all machines
@@ -604,7 +606,7 @@ async fn down(fly: &Fly) -> i32 {
 
 fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| {
-        eprintln!("{name} is not set (put it in .env and `set -a; . ../../.env; set +a`).");
+        eprintln!("{name} is not set (put it in .env; see the top of this file).");
         std::process::exit(2);
     })
 }

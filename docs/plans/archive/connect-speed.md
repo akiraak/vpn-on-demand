@@ -2,7 +2,7 @@
 
 ## 目的・背景
 
-- 今は「Connect」を押してから Connected まで 3〜5 分かかる（2026-11-17 に sx360 で確かめた。[windows-app](archive/windows-app.md) の Phase 5）。NordVPN は数秒でつながっていたので、使うたびの待ちが長い
+- 今は「Connect」を押してから Connected まで 3〜5 分かかる（2026-11-17 に sx360 で確かめた。[windows-app](windows-app.md) の Phase 5）。NordVPN は数秒でつながっていたので、使うたびの待ちが長い
 - 試作（jp-exit）では「VPS を作ってから Tailscale に参加するまで約 2 分」だった。残りの時間がどこで使われているかは測っていない
 - 目標: まずどこに何秒かかっているかを測る。そのうえで、今の方式の中での改善と、方式そのものの見直し（VPS の事業者、Tailscale を使わない経路など）を比べて、ユーザーと決める
 - 変えない方針（CLAUDE.md の「設計の方針」）: 課金を止めることを最優先にする。使わない月は（ほぼ）0 円。専用の VPN クライアントやドライバを入れない。誰でも README を見て使える
@@ -51,7 +51,7 @@
   - `set -x` の出力には auth key が出るので、VPS の上とプログラムの両方で `tskey-...` を伏せてから保存する
 - 終わったら必ず切断し、Vultr にアプリのタグの VPS が残っていないことを確かめる。Ctrl-C でも切断して消す。始める前にアプリのタグの VPS があれば、本物の接続を邪魔しないように止める
 - キーは `.env` の `VULTR_API_KEY` と `TAILSCALE_AUTH_KEY`（変数名は `.env.example`）。結果は `app/src-tauri/measure-out/<region>-<時刻>/`（Git 管理外）に `timeline.txt`、`events.json`、VPS の中のファイルを保存し、数字はこのプランの「結果」に書く
-- 実行: `cd app/src-tauri && set -a && . ../../.env && set +a && cargo run --example measure -- nrt JP`（`--print-user-data` で、何も作らずに user data を表示する）
+- 実行: `cd app/src-tauri && set -a && . <(grep -v '^FLY_API_TOKEN=' ../../.env) && set +a && cargo run --example measure -- nrt JP`（`FLY_API_TOKEN` は空白を含むので除く）（`--print-user-data` で、何も作らずに user data を表示する）
 
 #### 結果（2026-11-18、vc2-1c-1gb、Ubuntu 24.04、sx360 の WSL から）
 
@@ -241,6 +241,35 @@ Phase 3 の本命の Fly.io で、本当に速いか、日本と判定される�
 - **IP の持ち主は AS60068 Datacamp Limited**（CDN77 / DataPacket）。Fly.io 自身の IP ではなく、商用の VPN 業者もよく借りている会社（Phase 3 の調査で、Mullvad の東京のリレーの一部もここ）。VPN の判定リストに載っている可能性があり、配信サイトで見られるかは Step 2 で確かめる
 - 出口の速さは 50 MB を落として 117 Mbit/s。HD の動画（5〜10 Mbit/s）には十分
 - 終わったあとにマシンが残っていないことを確かめた。Fly.io のアプリ（`vpn-on-demand-test-1bb1e1`）は残した（アプリに料金はかからない）
+
+#### Step 2 の結果（2026-11-18、sx360 で、ユーザーが確かめた）
+
+- `measure_fly --up` で東京にマシンを作って出口にした（17.9 秒）。今回は別のホストに置かれ、**IP の持ち主は AS396356 Latitude.sh**（Step 1 の Datacamp とは別）。作るたびに出口の会社が変わりうる
+- **TVer: 見られた。U-NEXT: 見られなかった。** Prime Video（日本）は、レンタルしている有料の作品が無く、確かめられなかった
+- U-NEXT が止めたのが Latitude.sh の IP だけか、Fly.io の IP をまとめてかは分からない
+- 確かめたあと `--down` でマシンを消し、残っていないことを確かめた
+- **比べるために、同じ日に Vultr でも試した**（sx360 のアプリで東京に接続。IP の持ち主は AS20473 The Constant Company、ipinfo.io の判定は JP / Ebara）。**U-NEXT も TVer も見られた。** アプリの接続時間は測らなかった（入っているのは Phase 2 の前の版）
+
+| 出口 | IP の持ち主 | TVer | U-NEXT | Prime Video |
+|---|---|---|---|---|
+| Fly.io（東京） | AS396356 Latitude.sh | 見られた | **見られない** | 確かめられず |
+| Vultr（東京） | AS20473 The Constant Company | 見られた | 見られた | 確かめられず（2026-11-16 の試作では見られた） |
+
+
+#### Step 3: 決めたこと（2026-11-18）
+
+**ユーザーが「Vultr のままにする」と決めた。** 3 サイトとも見られる見込みがいちばん高いのは、今のところ Vultr。
+
+- アプリには Phase 2 の高速化（接続 約 90 秒、切断 数秒）を入れ、Fly.io は組み込まない
+- 画面の所要時間を直す: 接続中の見出しを「usually 3–5 minutes」から「usually about 1½ minutes」に、タイムラインの「Server is starting and joining your tailnet」の目安を「Usually about 2 minutes」から「Usually 1–2 minutes」に
+- この版のインストーラを作って sx360 に入れ、アプリの画面で接続と切断の時間を測る（切断の再試行の待ちを短くした変更の実測も兼ねる）
+- Fly.io は、配信サイトに止められにくい出口が見つかったら見直す。Fly.io のアプリ（`vpn-on-demand-test-1bb1e1`、マシンなし）は料金がかからないので残してある。計測のプログラム `examples/measure_fly.rs` も残す
+
+#### Step 4 の結果（2026-11-18、sx360 のアプリで、ユーザーが測った）
+
+- Phase 2 を入れた版のインストーラを作って sx360 に入れ、アプリで東京に接続した。**接続は 1 分 30 秒**（Vultr の記録でも、VPS の作成から Tailscale への参加まで 80 秒）。**切断は 5 秒**（再試行の待ちを短くした変更が効いた。前は約 11 秒、その前は 36 秒）
+- 切断のあと、Vultr に VPS が残っていないこと、出口が外れていることを確かめた
+- これでこのタスクを終える
 
 ## 影響範囲
 

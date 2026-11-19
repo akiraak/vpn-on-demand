@@ -59,6 +59,7 @@
   - macOS: `/usr/local/bin/tailscale`（スタンドアロン版で CLI のランチャーを入れた場合）→ `/Applications/Tailscale.app/Contents/MacOS/Tailscale`（App Store 版はここ）の順に探す
   - LocalAPI は内部の API で文書化されていないので使わない
 - **専用の VPN クライアントやドライバは入れない。** 通信の経路は Tailscale に任せる。
+- **VPS の事業者は Vultr**（2026-11-18 に決めた）。接続は約 1 分半で、大半は Vultr の VM の用意と起動。Fly.io（止めておいたマシンの起動で約 4 秒）も試したが、出口の IP で U-NEXT が見られなかったので採らない。比べた結果は `docs/plans/archive/connect-speed.md`
 - **Windows 版はコード署名をしない**（2026-11-18 に決めた）。SmartScreen の警告の越え方を README で案内する。
 
 ## 秘密情報
@@ -79,6 +80,7 @@
 - `app/`: アプリ（Tauri 2）
   - `app/src-tauri/src/`: 処理（Rust）。`lib.rs`（アプリの状態、画面から呼ぶコマンド、自動切断などのタイマー）、`vpn.rs`（接続・切断の流れ。Vultr と Tailscale はトレイトの後ろにあり、偽物でテストする）、`vultr.rs`（Vultr API v2）、`tailscale.rs`（Tailscale の CLI）、`cloud_init.rs`（VPS の user data）、`secrets.rs`（資格情報ストア）、`settings.rs`（秘密でない設定の JSON）、`tray.rs`（トレイ / メニューバー）
   - `app/index.html`、`app/src/main.ts`、`app/src/styles.css`: 画面（Vite + TypeScript、フレームワークなし）。表示と操作だけで、状態は Rust から `state` イベントで受け取る
+  - `app/src-tauri/examples/`: 開発用の計測のプログラム。`measure.rs`（Vultr で接続と切断の時間を段階ごとに測る）、`measure_fly.rs`（Fly.io の試験）。本物の VPS を作るので、動かす前にユーザーに確認する。使い方は各ファイルの先頭と `docs/plans/archive/connect-speed.md`
   - `app/src-tauri/icons/`: アイコン。元の絵は `icon.svg` と `tray/*.svg`。PNG と ICO は SVG から作る（作り方は `docs/plans/archive/design.md` の「進み具合」）
 - `docs/plans/`: プラン。済んだものは `docs/plans/archive/`
 

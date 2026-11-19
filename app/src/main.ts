@@ -205,7 +205,7 @@ function lines(st: UiState): Line[] {
   return [
     { now: "Checking Tailscale and Vultr", done: "Checked Tailscale and Vultr" },
     progress.serverLine ?? { now: `Creating a server in ${where}`, done: `Created a server in ${where}` },
-    { now: "Server is starting and joining your tailnet", done: "Server joined your tailnet", help: "Usually about 2 minutes" },
+    { now: "Server is starting and joining your tailnet", done: "Server joined your tailnet", help: "Usually 1–2 minutes" },
     approval,
     { now: "Switching this PC to the server", done: "Switched this PC to the server" },
     { now: "Checking the public IP", done: "Checked the public IP" },
@@ -281,7 +281,7 @@ function renderRoute(st: UiState) {
       if (st.phase === "disconnecting" || progress.plan === "disconnect") {
         cap = st.phase === "connecting" ? "Cancelling…" : `Disconnecting from <b>${esc(place(region))}</b>…`;
       } else {
-        cap = `Connecting via <b>${esc(place(region))}</b> · usually 3–5 minutes`;
+        cap = `Connecting via <b>${esc(place(region))}</b> · usually about 1½ minutes`;
       }
       break;
     }
