@@ -13,35 +13,15 @@ pub struct TrayItems {
     disconnect: MenuItem<Wry>,
 }
 
-/// A round status icon drawn at runtime: gray = off, amber = working, green = connected.
-fn icon(rgb: [u8; 3]) -> Image<'static> {
-    const N: u32 = 32;
-    let mut px = vec![0u8; (N * N * 4) as usize];
-    let c = (N as f32 - 1.0) / 2.0;
-    for y in 0..N {
-        for x in 0..N {
-            let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt();
-            let i = ((y * N + x) * 4) as usize;
-            // Filled disc with a soft edge, and a white ring inside it.
-            let outer = (14.5 - d).clamp(0.0, 1.0);
-            let ring = (1.0 - ((d - 8.0).abs() - 1.2).clamp(0.0, 1.0)) * (d < 10.0) as u8 as f32;
-            let (r, g, b) = (
-                rgb[0] as f32 * (1.0 - ring) + 255.0 * ring,
-                rgb[1] as f32 * (1.0 - ring) + 255.0 * ring,
-                rgb[2] as f32 * (1.0 - ring) + 255.0 * ring,
-            );
-            px[i] = r as u8;
-            px[i + 1] = g as u8;
-            px[i + 2] = b as u8;
-            px[i + 3] = (outer * 255.0) as u8;
-        }
-    }
-    Image::new_owned(px, N, N)
-}
+/// Tray icons: the app's route glyph with the exit dot in the state color.
+/// Sources are `icons/tray/*.svg`.
+const OFF: &[u8] = include_bytes!("../icons/tray/off.png");
+const BUSY: &[u8] = include_bytes!("../icons/tray/busy.png");
+const ON: &[u8] = include_bytes!("../icons/tray/on.png");
 
-const GRAY: [u8; 3] = [0x8b, 0x94, 0x9e];
-const AMBER: [u8; 3] = [0xd2, 0x99, 0x22];
-const GREEN: [u8; 3] = [0x2d, 0xa4, 0x4e];
+fn icon(png: &'static [u8]) -> Image<'static> {
+    Image::from_bytes(png).expect("embedded tray icon")
+}
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open VPN on Demand", true, None::<&str>)?;
@@ -65,7 +45,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     });
 
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(icon(GRAY))
+        .icon(icon(OFF))
         .tooltip("VPN on Demand")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
@@ -99,25 +79,25 @@ pub fn refresh(app: &AppHandle, st: &UiState) {
         .state::<App>()
         .busy
         .load(std::sync::atomic::Ordering::SeqCst);
-    let (rgb, status) = match st.phase {
+    let (png, status) = match st.phase {
         Phase::Connected => {
             let city = st
                 .connection
                 .as_ref()
                 .map(|c| crate::city(app, &c.server.region))
                 .unwrap_or_default();
-            (GREEN, format!("Connected – {city}"))
+            (ON, format!("Connected – {city}"))
         }
-        Phase::Connecting => (AMBER, "Connecting…".to_string()),
-        Phase::Disconnecting => (AMBER, "Disconnecting…".to_string()),
-        Phase::Starting => (GRAY, "Starting…".to_string()),
+        Phase::Connecting => (BUSY, "Connecting…".to_string()),
+        Phase::Disconnecting => (BUSY, "Disconnecting…".to_string()),
+        Phase::Starting => (OFF, "Starting…".to_string()),
         Phase::Disconnected if !st.leftover.is_empty() => {
-            (AMBER, "A server is still running".to_string())
+            (BUSY, "A server is still running".to_string())
         }
-        Phase::Disconnected => (GRAY, "Not connected".to_string()),
+        Phase::Disconnected => (OFF, "Not connected".to_string()),
     };
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_icon(Some(icon(rgb)));
+        let _ = tray.set_icon(Some(icon(png)));
         let _ = tray.set_tooltip(Some(format!("VPN on Demand – {status}")));
     }
     let Some(items) = app.try_state::<TrayItems>() else {
@@ -146,4 +126,15 @@ pub fn refresh(app: &AppHandle, st: &UiState) {
     };
     let _ = items.disconnect.set_text(text);
     let _ = items.disconnect.set_enabled(enabled);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_icons_decode() {
+        for png in [super::OFF, super::BUSY, super::ON] {
+            let img = super::icon(png);
+            assert_eq!((img.width(), img.height()), (32, 32));
+        }
+    }
 }

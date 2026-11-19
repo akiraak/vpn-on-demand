@@ -23,14 +23,13 @@
 
 - [~] デザインを改善する（アプリのアイコン、画面の見た目、初回の案内） [plan](docs/plans/design.md)
   - 派生元: 「Windows 版を完成させる」（2026-11-17 に完了。[plan](docs/plans/archive/windows-app.md)）
-  - [~] Phase 0: デザイン例を 3 案作って見比べ、ユーザーが決める
-  - [ ] Phase 1: アイコン（アプリ、トレイ）
-  - [ ] Phase 2: Connect タブ
-  - [ ] Phase 3: Settings タブと初回の案内
-  - [ ] [Windows] Phase 4: sx360 でビルドして確かめる
-  - アプリのアイコンは Tauri の既定のまま。インストーラ、タスクバー、スタートメニューに出る。トレイのアイコンは実行時に描く丸（灰 / 黄 / 緑）
-  - 画面: Connect タブ（状態、国と都市、接続中の情報）と Settings タブ（キー、Test setup、自動切断、Setup guide）、終了の確認の画面
-  - 初回の案内: キーが無いと Welcome と Settings タブが出る。初めての人が迷わず 4 つの手順を終えられるかを見直す
+  - [x] Phase 0: デザイン例を 3 案作って見比べ、ユーザーが決める
+    - 2026-11-18: C（経路を見せる）に決めた
+  - [x] Phase 1: アイコン（アプリ、トレイ）
+  - [x] Phase 2: Connect タブ
+  - [x] Phase 3: Settings タブと初回の案内
+  - [~] [Windows] Phase 4: sx360 でビルドして確かめる
+    - 2026-11-18: 画面と窓のアイコンは確かめた。トレイ・タスクバー・スタートメニューの見た目はユーザーに見てもらう
 - [ ] ドキュメントを整備する（README を読めば、だれでもインストールして使える状態にする）
   - 派生元: 「Windows 版を完成させる」（2026-11-17 に完了。[plan](docs/plans/archive/windows-app.md)）
   - README（英語）: 何ができるか、用意するもの（Vultr、Tailscale）、tailnet のポリシー、キーの作り方、インストール（SmartScreen の警告の越え方）、使い方、費用、困ったとき、片付け（アンインストール、キーの削除）

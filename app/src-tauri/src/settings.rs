@@ -12,6 +12,15 @@ pub struct Settings {
     pub last_region: String,
     /// Country of `last_region` (ISO code).
     pub last_country: String,
+    /// The user marked the tailnet policy step of the setup checklist as done
+    /// (the app can't check the policy itself). A settings file from before this field
+    /// existed belongs to someone who already set the app up, so it counts as done.
+    #[serde(default = "yes")]
+    pub policy_done: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -20,6 +29,7 @@ impl Default for Settings {
             auto_disconnect_hours: Some(4),
             last_region: "nrt".into(),
             last_country: "JP".into(),
+            policy_done: false,
         }
     }
 }
@@ -62,6 +72,7 @@ mod tests {
             auto_disconnect_hours: None,
             last_region: "ewr".into(),
             last_country: "US".into(),
+            policy_done: true,
         };
         s.save(&dir).unwrap();
         assert_eq!(Settings::load(&dir), s);
@@ -69,6 +80,9 @@ mod tests {
         let l = Settings::load(&dir);
         assert_eq!(l.last_region, "fra");
         assert_eq!(l.auto_disconnect_hours, Some(4));
+        assert!(l.policy_done, "a file from an older version counts as set up");
+        std::fs::write(Settings::path(&dir), r#"{"policy_done":false}"#).unwrap();
+        assert!(!Settings::load(&dir).policy_done);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(
             Settings {

@@ -18,24 +18,37 @@
 - 見比べのページ: https://claude.ai/artifact/Pwg5wgYsgUZamw2cyyLWRQ （元のファイルはセッションのスクラッチパッド。リポジトリには入れない）
 - ユーザーが選んだ案（または組み合わせ）で、下の Phase 1〜3 の中身を決め直す
 
+- **決定（2026-11-18）: ユーザーが C（経路を見せる）に決めた。** 下の Phase 1〜3 は C に合わせて書いた
+
 ### Phase 1: アイコン
 
-- アプリのアイコン: 角の丸い四角に地球（緯線・経線）と、電源の印（「使うときだけ」）を組み合わせる。16 px でも形が分かるように線を太くする。SVG で描き、ヘッドレスの Chromium で 1024 px の PNG にして、`npx tauri icon` で各サイズ（ico、icns、png）を作る。元の SVG は `app/src-tauri/icons/icon.svg` に置く
-- トレイのアイコン: アプリのアイコンと同じ地球の形を、状態の色（灰 / 黄 / 緑）で出す。SVG から 32 px の PNG を 3 つ作り、`include_bytes!` で埋め込む（実行時に描く処理は消す）
+- アプリのアイコン: C の案のもの（緑の角丸の四角に、白い出発点から点線で黄色い行き先へ向かう経路）。SVG を `app/src-tauri/icons/icon.svg` に置き、ヘッドレスの Chromium で 1024 px の PNG にして、`npx tauri icon` で各サイズ（ico、icns、png）を作り直す
+- トレイのアイコン: 灰色の経路と出発点に、行き先の丸を状態の色（灰 / 黄 / 緑）で塗ったもの。SVG から 32 px の PNG を 3 つ作り（`app/src-tauri/icons/tray/`）、`include_bytes!` で埋め込む。実行時に描く処理は消す
 
 ### Phase 2: Connect タブ
 
-- 上に、アイコンとアプリ名の小さなヘッダー
-- 状態の大きな表示: 状態の色の地球のアイコン、状態の文（Not connected / Connecting to Tokyo, Japan / Connected）、その下に場所
-- 接続中・切断中は、手順の一覧（Create server → Join tailnet（約 2 分）→ Exit node approved → Switch → Check IP）で、済んだ手順・いまの手順・まだの手順を見せ、経過時間を出す。Rust 側の `Step` はそのまま使い、画面側で手順の番号に対応させる
-- 接続したら、表の代わりに小さなタイル（Public IP と国、Running for、Estimated cost、Auto-disconnect）で出す
-- 国と都市の選択は横に並べ、Connect のボタンを幅いっぱいにする
+- タブ（Connect / Settings）は下線で示す
+- 上に経路の絵: This PC → サーバー（都市の名前）→ Internet。状態で絵を変える
+  - 未接続: サーバーは点線の枠（No server）、下に「Traffic goes out from your own connection」
+  - 接続中・切断中: サーバーは黄色の点線の枠で点滅、線は黄色
+  - 接続済み: 全部緑の線
+  - 残った VPS がある: サーバーは黄色で「Still running」。Delete it / Use it のボタンを出す
+- 未接続のとき: 国の一覧（検索つき）。選んだ国の行に都市を並べ、複数あれば選べる。下に Connect のボタン（「Connect via Tokyo」）
+- 接続中・切断中: 時刻つきのタイムライン。Rust の `Step` を手順の番号に対応させ、手順が変わった時刻を画面側で覚えて出す
+  - 接続: Check Tailscale and Vultr → Create a server（`removing_other` / `using_existing` もここ）→ Join your tailnet（約 2 分）→ Approve as an exit node（待っているときは管理画面への案内）→ Switch this PC → Check the public IP
+  - 切断: Turn off the exit node → Delete the server → Check that it's gone
+- 接続済み: 外の IP の行（選んだ国と違えば警告）、タイル 3 つ（Running、Cost so far、Auto-off in と Reset）、Disconnect のボタン
+- エラーやお知らせの帯は、経路の絵の上に出す
 
 ### Phase 3: Settings タブと初回の案内
 
-- Settings の上の部分を「Setup」にし、4 つの手順を番号付きで並べ、**手順 3（auth key）と手順 4（Vultr の API キー）の中に入力欄を置く**。手順ごとに済んだか（✓）を出す（手順 1 は Tailscale の状態、手順 3・4 はキーが保存されているか。手順 2 のポリシーはアプリから確かめられないので印を出さない）
-- 最後に Test setup。3 つとも ✓ なら「Go to Connect」のボタンを出す
-- キーがそろった後は、手順の説明を畳み（開けば読める）、キーの欄と Auto-disconnect を上に出す
+- 上に「Setup checklist」（N of 4 done）。4 つの行を開いて済ませる
+  1. Tailscale is installed and signed in: Tailscale の状態で自動で ✓（`UiState.tailscale_error` が無い）
+  2. Tailnet policy allows the app's servers: アプリから確かめられないので、ポリシーをコピーするボタンと「Mark as done」を置く。済んだ印は設定（`Settings.policy_done`、新しく足す）に保存する
+  3. Create a Tailscale auth key: 手順と入力欄。保存されていれば ✓ と伏せたキー、Replace / Remove
+  4. Create a Vultr API key: 同じ
+- 済んでいない最初の行を開いておく。全部済んだら行は閉じ、Test setup のボタン。結果は各行の印（Checked / Works / エラー）に出す。初回で全部 ✓ なら「Go to Connect」を出す
+- その下に Auto-disconnect と、バージョン・GitHub へのリンク
 - 終了の確認の画面も、ほかの画面と見た目をそろえる
 
 ### Phase 4: sx360 で確かめる
@@ -47,6 +60,7 @@
 
 - `app/index.html`、`app/src/main.ts`、`app/src/styles.css`
 - `app/src-tauri/icons/`（作り直し）、`app/src-tauri/src/tray.rs`（アイコンを埋め込みの PNG に）
+- `app/src-tauri/src/settings.rs`（`policy_done` を足す）
 - Rust のロジック（接続・切断）は変えない。画面に渡す状態（`UiState`）も、足りなければ足すだけにする
 - VPS は作らない。接続中の画面は偽物の状態で確かめる（実物で確かめたくなったら、作る前にユーザーに確認する）
 
@@ -55,3 +69,19 @@
 - 画面: Tauri の API（`window.__TAURI_INTERNALS__`）を偽物に差し替えるページをスクラッチパッドに作り（リポジトリには入れない）、ヘッドレスの Chromium で各状態（起動中、キー無し、未接続、残った VPS、接続中の各手順、承認待ち、接続済み、切断中、エラー、終了の確認、ダークモード、最小の窓の大きさ 420×520）を撮って確かめる
 - `npm run build`（tsc）と `cargo test`、`cargo clippy` が通ること
 - sx360 で実物を確かめる（Phase 4）。フォントは Windows（Segoe UI）で見え方が変わるので、最終の確認は sx360 の画面で行う
+
+## 進み具合
+
+### Phase 1〜3（2026-11-18）
+
+- アイコン: `icons/icon.svg` から 1024 px の PNG を作り、`npx tauri icon` で作り直した（Android と iOS 用に作られたものは消した）。トレイは `icons/tray/{off,busy,on}.svg` から 32 px の PNG を作り、`tray.rs` で `include_bytes!` で埋め込んだ（実行時に描く処理は消した）。埋め込んだ PNG が読めるかの単体テストを足した
+- **アイコンを替えたときは `src-tauri/build.rs` を `touch` してからビルドする。** アイコンのファイルを替えただけでは、exe に埋め込むビルドスクリプトがやり直されず、古いアイコンのままになった
+- 画面: `index.html`、`styles.css`、`main.ts` を C の案で書き直した。Connect（経路の絵、検索つきの国の一覧と都市のボタン、時刻つきのタイムライン、接続中の IP とタイル）、Settings（開いて済ませるチェックリスト。Test setup の結果を各行の印に出す）、終了の確認の画面。ダークモードは Windows の設定に合わせる
+- `Settings.policy_done` を足した。前の版の設定ファイル（この項目が無い）は、すでに設定を済ませた人のものなので「済んだ」とみなす（`#[serde(default = "yes")]`）。設定ファイルが無い新しい人は「済んでいない」から始まる
+- 確かめたこと: Tauri の API を偽物に替えたページをヘッドレスの Chromium で撮って、未接続、検索、残った VPS、エラー、接続中、承認待ち、Cancel、接続済み、IP の国の食い違い、切断中、初回（Tailscale 無しを含む）、設定済み、終了の確認を、ライト・ダーク・最小の窓で確かめた（撮影のスクリプトはスクラッチパッドに置き、リポジトリには入れていない）。`npm run build`、`cargo test`（26 件）、`cargo clippy` は通った
+
+### Phase 4（2026-11-18、sx360）
+
+- WSL から Windows 版をビルドし、sx360 に入れ直した（インストーラ 2.26 MiB）。exe と窓のアイコンが新しいものになったこと、Connect と Settings の画面（Windows はダークモード）、Test setup の結果の出方を、UI Automation と PrintWindow で確かめた
+- 前の版の設定ファイルのまま起動して、チェックリストが「4 of 4 done」になることを確かめた
+- まだ: トレイ、タスクバー、スタートメニュー、インストーラのアイコンの見た目（ユーザーに画面で見てもらう）。VPS を作る接続・切断の画面は偽物の状態だけで確かめた

@@ -42,7 +42,7 @@ type UiState = {
 type Region = { id: string; city: string; country: string; continent: string };
 type Country = { code: string; continent: string; regions: Region[] };
 type Saved = { name: string; masked: string | null };
-type Settings = { auto_disconnect_hours: number | null; last_region: string; last_country: string };
+type Settings = { auto_disconnect_hours: number | null; last_region: string; last_country: string; policy_done: boolean };
 type Check = { ok: boolean; message: string };
 type SetupReport = { tailscale: Check; vultr: Check; auth_key: Check };
 
@@ -58,6 +58,7 @@ const nameOf = (code: string) => {
     return code;
   }
 };
+const icon = (id: string, size = 12) => `<svg width="${size}" height="${size}"><use href="#${id}"/></svg>`;
 
 const ADMIN_MACHINES = "https://login.tailscale.com/admin/machines";
 
@@ -65,6 +66,10 @@ let state: UiState | null = null;
 let countries: Country[] = [];
 let settings: Settings | null = null;
 let firstState = true;
+let firstRun = false;
+let selCountry = "JP";
+let selRegion = "nrt";
+let cancelling = false;
 
 function regionInfo(id: string): Region | undefined {
   for (const c of countries) {
@@ -74,23 +79,31 @@ function regionInfo(id: string): Region | undefined {
   return undefined;
 }
 
+function city(id: string): string {
+  return regionInfo(id)?.city ?? id;
+}
+
 function place(id: string): string {
   const r = regionInfo(id);
   return r ? `${r.city}, ${nameOf(r.country)}` : id;
 }
 
-function duration(ms: number): string {
+/** 1:05:09 / 5:09 */
+function clock(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (h > 0) return `${h} h ${String(m).padStart(2, "0")} min`;
-  if (m > 0) return `${m} min ${String(s).padStart(2, "0")} s`;
-  return `${s} s`;
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
-function mmss(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+/** 2 h 48 min / 12 min */
+function hoursMinutes(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
 function showTab(tab: string) {
@@ -101,39 +114,185 @@ function showTab(tab: string) {
   if (tab === "settings") loadKeys();
 }
 
-// ---------- main screen ----------
+function banner(kind: "error" | "info" | "warn", html: string): string {
+  return `<div class="banner ${kind}">${html}</div>`;
+}
 
-function stepText(s: Step): string {
-  switch (s.step) {
-    case "checking":
-      return "Checking Tailscale and Vultr…";
-    case "removing_other":
-      return `Deleting the server in ${esc(place(s.region))}…`;
-    case "creating_server":
-      return `Creating a server in ${esc(place(s.region))}…`;
-    case "using_existing":
-      return `Using the server that is already running in ${esc(place(s.region))}…`;
-    case "waiting_for_server":
-      return `Waiting for the server to start and join your tailnet (${mmss(s.seconds)}). This usually takes about 2 minutes.`;
-    case "waiting_for_approval":
-      return `Waiting for <b>${esc(s.host_name)}</b> to be approved as an exit node (${mmss(s.seconds)}).
-        Approve it in the <a href="${ADMIN_MACHINES}">Tailscale admin console</a> (… → Edit route settings → Use as exit node),
-        or add <code>autoApprovers</code> to your tailnet policy (see Settings) so it happens automatically next time.`;
-    case "switching":
-      return "Switching this PC to the new exit node…";
-    case "checking_ip":
-      return "Checking your public IP address…";
-    case "turning_off_exit_node":
-      return "Turning off the exit node…";
-    case "deleting_server":
-      return `Deleting the server in ${esc(place(s.region))}…`;
-    case "verifying":
-      return "Checking that the server is gone…";
+// ---------- timeline ----------
+
+type Line = { done: string; now: string; help?: string };
+type Plan = "connect" | "disconnect";
+
+const CONNECT_STEPS = ["checking", "server", "waiting_for_server", "waiting_for_approval", "switching", "checking_ip"];
+const DISCONNECT_STEPS = ["turning_off_exit_node", "deleting_server", "verifying"];
+
+function planOf(s: Step | null, phase: Phase): Plan {
+  if (s && ["turning_off_exit_node", "deleting_server", "verifying"].includes(s.step)) return "disconnect";
+  if (s) return "connect";
+  return phase === "disconnecting" ? "disconnect" : "connect";
+}
+
+function indexOf(s: Step | null, plan: Plan): number {
+  if (!s) return 0;
+  const key = ["removing_other", "creating_server", "using_existing"].includes(s.step) ? "server" : s.step;
+  return Math.max(0, (plan === "connect" ? CONNECT_STEPS : DISCONNECT_STEPS).indexOf(key));
+}
+
+/** What the timeline remembers while one connect / disconnect runs. */
+const progress = {
+  plan: null as Plan | null,
+  start: 0,
+  index: 0,
+  doneAt: [] as (number | null)[],
+  serverLine: null as Line | null,
+  region: "",
+};
+
+function trackProgress(st: UiState) {
+  const busy = st.phase === "connecting" || st.phase === "disconnecting";
+  if (!busy) {
+    progress.plan = null;
+    cancelling = false;
+    return;
+  }
+  const plan = planOf(st.step, st.phase);
+  if (progress.plan !== plan) {
+    progress.plan = plan;
+    progress.start = Date.now();
+    progress.index = 0;
+    progress.doneAt = [];
+    progress.serverLine = null;
+  }
+  progress.region = st.target_region ?? st.connection?.server.region ?? st.leftover[0]?.region ?? "";
+  const s = st.step;
+  if (s && "region" in s && !st.target_region) progress.region = s.region;
+  const i = indexOf(s, plan);
+  for (let k = progress.index; k < i; k++) progress.doneAt[k] ??= Date.now();
+  progress.index = Math.max(progress.index, i);
+
+  if (s?.step === "creating_server") {
+    progress.serverLine = { now: `Creating a server in ${esc(city(s.region))}`, done: `Created a server in ${esc(city(s.region))}` };
+  } else if (s?.step === "using_existing") {
+    progress.serverLine = {
+      now: `Using the server already running in ${esc(city(s.region))}`,
+      done: `Used the server already running in ${esc(city(s.region))}`,
+    };
+  } else if (s?.step === "removing_other") {
+    progress.serverLine = { now: `Deleting the server in ${esc(city(s.region))}`, done: `Deleted the server in ${esc(city(s.region))}` };
   }
 }
 
-function banner(kind: "error" | "info" | "warn", html: string): string {
-  return `<div class="banner ${kind}">${html}</div>`;
+function lines(st: UiState): Line[] {
+  const where = esc(city(progress.region));
+  if (progress.plan === "disconnect") {
+    return [
+      { now: "Turning off the exit node", done: "Turned off the exit node" },
+      { now: `Deleting the server in ${where}`, done: `Deleted the server in ${where}` },
+      { now: "Checking that the server is gone", done: "Checked that the server is gone" },
+    ];
+  }
+  const approval: Line = { now: "Waiting for approval as an exit node", done: "Approved as an exit node" };
+  if (st.step?.step === "waiting_for_approval") {
+    approval.help = `Approve <b>${esc(st.step.host_name)}</b> in the <a href="${ADMIN_MACHINES}">Tailscale admin console</a>
+      (… → Edit route settings → Use as exit node), or add <code>autoApprovers</code> to your tailnet policy
+      (see Settings) so it happens automatically.`;
+  }
+  return [
+    { now: "Checking Tailscale and Vultr", done: "Checked Tailscale and Vultr" },
+    progress.serverLine ?? { now: `Creating a server in ${where}`, done: `Created a server in ${where}` },
+    { now: "Server is starting and joining your tailnet", done: "Server joined your tailnet", help: "Usually about 2 minutes" },
+    approval,
+    { now: "Switching this PC to the server", done: "Switched this PC to the server" },
+    { now: "Checking the public IP", done: "Checked the public IP" },
+  ];
+}
+
+function renderTimeline(st: UiState) {
+  const tl = $("#timeline");
+  if (!progress.plan) {
+    tl.hidden = true;
+    return;
+  }
+  const now = Date.now();
+  tl.innerHTML = lines(st)
+    .map((l, i) => {
+      if (i < progress.index) {
+        const at = progress.doneAt[i];
+        return `<li class="done"><span class="m">${icon("i-check")}</span><span class="label">${l.done}</span><span class="t">${at ? clock(at - progress.start) : ""}</span></li>`;
+      }
+      if (i === progress.index) {
+        return `<li class="now"><span class="m"></span><span><span class="label">${l.now}…</span>${l.help ? `<small>${l.help}</small>` : ""}</span><span class="t">${clock(now - progress.start)}</span></li>`;
+      }
+      return `<li><span class="m"></span><span class="label">${l.done}</span><span class="t"></span></li>`;
+    })
+    .join("");
+  tl.hidden = false;
+}
+
+// ---------- connect screen ----------
+
+function setNode(id: string, cls: string) {
+  $(id).className = `node ${cls}`;
+}
+
+function renderRoute(st: UiState) {
+  const pulse = $("#n-server .dot");
+  pulse.classList.remove("pulse");
+  let server = "No server";
+  let cap = "";
+  let w1 = "idle";
+  let w2 = "idle";
+  setNode("#n-pc", "live");
+  setNode("#n-net", "live");
+  setNode("#n-server", "ghost");
+
+  switch (st.phase) {
+    case "starting":
+      setNode("#n-pc", "");
+      setNode("#n-net", "");
+      w1 = w2 = "";
+      cap = "Checking Tailscale and Vultr…";
+      break;
+    case "disconnected":
+      if (st.leftover.length) {
+        setNode("#n-server", "warn");
+        server = `${esc(city(st.leftover[0].region))}`;
+        w1 = "";
+        w2 = "";
+        cap = `Not connected, but a server is still running in <b>${esc(place(st.leftover[0].region))}</b>.`;
+      } else {
+        cap = "Not connected. Traffic goes out from <b>your own connection</b>.";
+      }
+      break;
+    case "connecting":
+    case "disconnecting": {
+      const region = progress.region;
+      setNode("#n-server", "wip");
+      pulse.classList.add("pulse");
+      server = region ? esc(city(region)) : "Server";
+      w1 = "wip";
+      w2 = "";
+      setNode("#n-net", "");
+      if (st.phase === "disconnecting" || progress.plan === "disconnect") {
+        cap = st.phase === "connecting" ? "Cancelling…" : `Disconnecting from <b>${esc(place(region))}</b>…`;
+      } else {
+        cap = `Connecting via <b>${esc(place(region))}</b> · usually 3–5 minutes`;
+      }
+      break;
+    }
+    case "connected": {
+      const region = st.connection?.server.region ?? "";
+      setNode("#n-server", "live");
+      server = esc(city(region));
+      w1 = w2 = "live";
+      cap = `Connected. Traffic goes out from <b>${esc(place(region))}</b>.`;
+      break;
+    }
+  }
+  $("#server-name").innerHTML = server;
+  $("#w-1").className = `wire ${w1}`;
+  $("#w-2").className = `wire ${w2}`;
+  $("#route-cap").innerHTML = cap;
 }
 
 function renderBanners(st: UiState) {
@@ -141,9 +300,7 @@ function renderBanners(st: UiState) {
   if (st.error) parts.push(banner("error", esc(st.error)));
   if (st.notice) parts.push(banner("info", esc(st.notice)));
   if (!st.keys_ready && st.phase !== "starting") {
-    parts.push(
-      banner("warn", `Add your Vultr API key and Tailscale auth key in <a href="#" data-goto="settings">Settings</a> first.`),
-    );
+    parts.push(banner("warn", `Finish the setup checklist in <a href="#" data-goto="settings">Settings</a> first.`));
   }
   if (st.tailscale_error && st.phase !== "connecting") parts.push(banner("warn", esc(st.tailscale_error)));
   if (st.leftover.length && st.phase === "disconnected") {
@@ -154,122 +311,169 @@ function renderBanners(st: UiState) {
     parts.push(
       banner(
         "warn",
-        `A server is still running: ${list}. It costs money until it is deleted.
-         <div class="actions"><button class="danger" data-action="delete-leftover">Delete it</button>
-         ${one ? `<button data-action="use-leftover" data-region="${esc(one.region)}">Use it</button>` : ""}</div>`,
+        `A server is still running: ${list}. It costs money until it's deleted.
+         <div class="actions"><button class="btn danger" data-action="delete-leftover">Delete it</button>
+         ${one ? `<button class="btn outline" data-action="use-leftover" data-region="${esc(one.region)}">Use it</button>` : ""}</div>`,
       ),
     );
   }
   $("#banners").innerHTML = parts.join("");
 }
 
-function renderDetails(st: UiState) {
-  const table = $("#details");
+function renderSession(st: UiState) {
+  const box = $("#session");
   const c = st.connection;
   if (st.phase !== "connected" || !c) {
-    table.hidden = true;
+    box.hidden = true;
     return;
   }
-  const rows: [string, string][] = [];
-  rows.push(["Exit location", esc(place(c.server.region))]);
-  if (c.public_ip) {
-    const ip = c.public_ip;
-    const warn = ip.country && c.expected_country && ip.country !== c.expected_country ? ' <span class="error">(not the country you picked)</span>' : "";
-    rows.push(["Public IP", `${esc(ip.ip)}<br><span class="hint">${esc([ip.city, nameOf(ip.country)].filter(Boolean).join(", "))} · ${esc(ip.org)}</span>${warn}`]);
+  box.hidden = false;
+  const ip = c.public_ip;
+  if (ip) {
+    const org = ip.org.replace(/^AS\d+\s+/, "");
+    const off = ip.country && c.expected_country && ip.country !== c.expected_country;
+    $("#ip").innerHTML =
+      `<b>${esc(ip.ip)}</b> <span class="muted">· ${esc([ip.city, ip.country].filter(Boolean).join(", "))}${org ? ` · ${esc(org)}` : ""}</span>` +
+      (off ? `<br><span class="error">Not in ${esc(nameOf(c.expected_country))}</span>` : "");
   } else {
-    rows.push(["Public IP", '<span class="hint">Couldn\'t check</span>']);
+    $("#ip").innerHTML = `<span class="muted">Couldn't check</span>`;
   }
+  renderTicks(st);
+}
+
+/** The numbers that change every second while connected. */
+function renderTicks(st: UiState) {
+  const c = st.connection;
+  if (!c) return;
   const created = Date.parse(c.server.created);
-  if (!Number.isNaN(created)) {
-    const elapsed = Date.now() - created;
-    rows.push(["Server running for", duration(elapsed)]);
-    if (c.hourly_cost != null) {
-      // Vultr bills per started hour, up to the monthly cap.
-      const hours = Math.max(1, Math.ceil(elapsed / 3_600_000));
-      rows.push(["Estimated cost", `$${(hours * c.hourly_cost).toFixed(3)} <span class="hint">($${c.hourly_cost}/h)</span>`]);
-    }
-  }
-  if (st.auto_disconnect_at) {
-    rows.push([
-      "Auto-disconnect",
-      `in ${duration(st.auto_disconnect_at - Date.now())} <button class="link-button" data-action="extend">Reset timer</button>`,
-    ]);
+  const elapsed = Number.isNaN(created) ? null : Date.now() - created;
+  $("#t-running").textContent = elapsed == null ? "–" : clock(elapsed);
+  if (elapsed != null && c.hourly_cost != null) {
+    // Vultr bills per started hour, up to the monthly cap.
+    const hours = Math.max(1, Math.ceil(elapsed / 3_600_000));
+    $("#t-cost").textContent = `$${(hours * c.hourly_cost).toFixed(3)}`;
+    $("#t-rate").textContent = `$${c.hourly_cost}/hour`;
   } else {
-    rows.push(["Auto-disconnect", '<span class="hint">Off</span>']);
+    $("#t-cost").textContent = "–";
+    $("#t-rate").textContent = "";
   }
-  table.innerHTML = rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("");
-  table.hidden = false;
+  const reset = $<HTMLButtonElement>("#t-reset");
+  if (st.auto_disconnect_at) {
+    $("#t-auto").textContent = hoursMinutes(st.auto_disconnect_at - Date.now());
+    reset.hidden = false;
+  } else {
+    $("#t-auto").textContent = "Off";
+    reset.hidden = true;
+  }
 }
 
 function render() {
   const st = state;
   if (!st) return;
-  const dot = $("#status-dot");
-  dot.className = `dot ${st.phase}${st.phase === "disconnected" && st.leftover.length ? " leftover" : ""}`;
-  const text: Record<Phase, string> = {
-    starting: "Checking…",
-    disconnected: st.leftover.length ? "Not connected (a server is still running)" : "Not connected",
-    connecting: `Connecting to ${st.target_region ? place(st.target_region) : "…"}`,
-    connected: st.connection ? `Connected – ${place(st.connection.server.region)}` : "Connected",
-    disconnecting: "Disconnecting…",
-  };
-  $("#status-text").textContent = text[st.phase];
-
-  const step = $("#step");
-  step.hidden = !st.step;
-  step.innerHTML = st.step ? stepText(st.step) : "";
-
+  trackProgress(st);
   renderBanners(st);
-  renderDetails(st);
+  renderRoute(st);
+  renderTimeline(st);
+  renderSession(st);
 
   const busy = st.phase === "connecting" || st.phase === "disconnecting" || st.phase === "starting";
+  $("#picker").hidden = !(st.phase === "disconnected" || st.phase === "starting");
   const connectBtn = $<HTMLButtonElement>("#connect");
   const disconnectBtn = $<HTMLButtonElement>("#disconnect");
-  connectBtn.hidden = st.phase === "connected" || st.phase === "connecting" || st.phase === "disconnecting";
-  connectBtn.disabled = busy || !st.keys_ready || countries.length === 0;
-  disconnectBtn.hidden = !(st.phase === "connected" || st.phase === "connecting" || st.phase === "disconnecting");
-  disconnectBtn.textContent = st.phase === "connecting" ? "Cancel" : st.phase === "disconnecting" ? "Disconnecting…" : "Disconnect";
-  disconnectBtn.disabled = st.phase === "disconnecting";
-  $<HTMLSelectElement>("#country").disabled = busy || st.phase === "connected";
-  $<HTMLSelectElement>("#city").disabled = busy || st.phase === "connected" || cityCount() <= 1;
+  connectBtn.hidden = !(st.phase === "disconnected" || st.phase === "starting");
+  connectBtn.disabled = busy || !st.keys_ready || !regionInfo(selRegion);
+  connectBtn.textContent = regionInfo(selRegion) ? `Connect via ${city(selRegion)}` : "Connect";
+  disconnectBtn.hidden = connectBtn.hidden === false;
+  if (st.phase === "connecting") {
+    disconnectBtn.textContent = cancelling || progress.plan === "disconnect" ? "Cancelling…" : "Cancel and delete the server";
+    disconnectBtn.disabled = cancelling || progress.plan === "disconnect";
+  } else if (st.phase === "disconnecting") {
+    disconnectBtn.textContent = "Disconnecting…";
+    disconnectBtn.disabled = true;
+  } else {
+    disconnectBtn.textContent = "Disconnect and delete the server";
+    disconnectBtn.disabled = false;
+  }
+  document.querySelectorAll<HTMLButtonElement>("#countries button, #search").forEach((b) => (b.disabled = busy));
   $<HTMLButtonElement>("#refresh").disabled = busy;
 
-  if (st.phase === "connected" && st.connection) {
-    $("#cost-hint").textContent = "To switch countries, disconnect first. Disconnecting deletes the server and stops billing.";
+  const hint = $("#cost-hint");
+  if (st.phase === "connected") {
+    hint.textContent = "Disconnecting deletes the server and stops billing. To switch countries, disconnect first.";
+  } else if (st.phase === "disconnected" || st.phase === "starting") {
+    hint.textContent = "Connecting creates a small server (about $0.007/hour in most places). Disconnecting deletes it.";
   } else {
-    $("#cost-hint").textContent = "Connecting creates a small server (about $0.007/hour in most places). Disconnecting deletes it.";
+    hint.textContent = "You can close this window. The app keeps working in the tray.";
   }
+
+  renderChecklist();
 }
 
-function cityCount(): number {
-  return countries.find((c) => c.code === $<HTMLSelectElement>("#country").value)?.regions.length ?? 0;
+// ---------- country list ----------
+
+function renderCountries() {
+  const box = $("#countries");
+  const q = $<HTMLInputElement>("#search").value.trim().toLowerCase();
+  const shown = countries.filter(
+    (c) =>
+      !q ||
+      nameOf(c.code).toLowerCase().includes(q) ||
+      c.code.toLowerCase() === q ||
+      c.regions.some((r) => r.city.toLowerCase().includes(q)),
+  );
+  if (!shown.length) {
+    box.innerHTML = `<p class="empty">${countries.length ? "No matching country." : "Loading the list of locations…"}</p>`;
+    return;
+  }
+  box.innerHTML = shown
+    .map((c) => {
+      const sel = c.code === selCountry;
+      const summary = c.regions.length > 2 ? `${c.regions.length} cities` : c.regions.map((r) => r.city).join(" · ");
+      const row = `<button class="it${sel ? " sel" : ""}" role="option" aria-selected="${sel}" data-country="${esc(c.code)}">
+        <span class="cc">${esc(c.code)}</span><span>${esc(nameOf(c.code))}</span><span class="c2">${esc(sel && c.regions.length > 1 ? city(selRegion) : summary)}</span></button>`;
+      const cities =
+        sel && c.regions.length > 1
+          ? `<div class="cities">${c.regions
+              .map((r) => `<button class="city${r.id === selRegion ? " sel" : ""}" data-region="${esc(r.id)}">${esc(r.city)}</button>`)
+              .join("")}</div>`
+          : "";
+      return row + cities;
+    })
+    .join("");
 }
 
-function fillCities(selected?: string) {
-  const code = $<HTMLSelectElement>("#country").value;
+function selectCountry(code: string) {
   const c = countries.find((c) => c.code === code);
-  const city = $<HTMLSelectElement>("#city");
-  city.innerHTML = (c?.regions ?? []).map((r) => `<option value="${esc(r.id)}">${esc(r.city)}</option>`).join("");
-  if (selected && c?.regions.some((r) => r.id === selected)) city.value = selected;
+  if (!c) return;
+  selCountry = code;
+  if (!c.regions.some((r) => r.id === selRegion)) selRegion = c.regions[0]?.id ?? "";
+  renderCountries();
   render();
+}
+
+function scrollToSelected() {
+  const sel = $("#countries .it.sel");
+  if (!sel) return;
+  const cities = sel.nextElementSibling?.classList.contains("cities") ? (sel.nextElementSibling as HTMLElement) : null;
+  const box = $("#countries");
+  const bottom = (cities ?? sel).offsetTop + (cities ?? sel).offsetHeight;
+  box.scrollTop = Math.max(0, Math.min(sel.offsetTop - 8, bottom - box.clientHeight + 8));
 }
 
 async function loadCountries() {
   try {
     countries = await invoke<Country[]>("list_countries");
   } catch (e) {
-    $("#country").innerHTML = "<option>Couldn't load the list</option>";
+    $("#countries").innerHTML = `<p class="empty">Couldn't load the list.</p>`;
     $("#banners").insertAdjacentHTML("afterbegin", banner("error", `Couldn't load the list of locations from Vultr: ${esc(String(e))}`));
     return;
   }
   countries.sort((a, b) => nameOf(a.code).localeCompare(nameOf(b.code), "en"));
-  const sel = $<HTMLSelectElement>("#country");
-  sel.innerHTML = countries
-    .map((c) => `<option value="${esc(c.code)}">${esc(nameOf(c.code))}${c.regions.length > 1 ? ` (${c.regions.length} cities)` : ""}</option>`)
-    .join("");
   const lastCountry = settings?.last_country ?? "JP";
-  sel.value = countries.some((c) => c.code === lastCountry) ? lastCountry : (countries[0]?.code ?? "");
-  fillCities(settings?.last_region);
+  selCountry = countries.some((c) => c.code === lastCountry) ? lastCountry : (countries[0]?.code ?? "");
+  selRegion = settings?.last_region ?? "";
+  selectCountry(selCountry);
+  scrollToSelected();
 }
 
 async function act(cmd: string, args?: Record<string, unknown>) {
@@ -284,26 +488,114 @@ function connect(region: string, country: string) {
   act("connect", { region, country });
 }
 
-// ---------- settings screen ----------
+// ---------- settings: checklist ----------
+
+type ItemId = "tailscale" | "policy" | "tailscale_auth_key" | "vultr_api_key";
+const ITEMS: ItemId[] = ["tailscale", "policy", "tailscale_auth_key", "vultr_api_key"];
+const savedKeys: Record<string, string | null> = {};
+let report: SetupReport | null = null;
+let openItem: ItemId | null | undefined; // undefined = not chosen yet
+
+function itemDone(id: ItemId): boolean {
+  switch (id) {
+    case "tailscale":
+      return !!state && state.phase !== "starting" && !state.tailscale_error;
+    case "policy":
+      return !!settings?.policy_done;
+    default:
+      return !!savedKeys[id];
+  }
+}
+
+function testCheck(id: ItemId): Check | null {
+  if (!report) return null;
+  return id === "tailscale" ? report.tailscale : id === "vultr_api_key" ? report.vultr : id === "tailscale_auth_key" ? report.auth_key : null;
+}
+
+function renderChecklist() {
+  let done = 0;
+  if (openItem === undefined && state && state.phase !== "starting" && Object.keys(savedKeys).length) {
+    openItem = ITEMS.find((id) => !itemDone(id)) ?? null;
+  }
+  for (const id of ITEMS) {
+    const el = document.querySelector<HTMLElement>(`.item[data-item="${id}"]`)!;
+    const ok = itemDone(id);
+    const check = testCheck(id);
+    const bad = check ? !check.ok && (id !== "tailscale_auth_key" || ok) : false;
+    if (ok) done++;
+    el.classList.toggle("done", ok && !bad);
+    el.classList.toggle("bad", bad);
+    el.classList.toggle("open", openItem === id);
+    el.querySelector(".r")!.setAttribute("aria-expanded", String(openItem === id));
+    el.querySelector(".m")!.innerHTML = bad ? icon("i-cross", 11) : ok ? icon("i-check", 11) : "";
+
+    const chip = el.querySelector<HTMLElement>(".chipx")!;
+    let text = "";
+    let cls = "";
+    if (check && (ok || id === "tailscale")) {
+      text = check.ok ? (id === "vultr_api_key" ? "Works" : id === "tailscale" ? "Checked" : "Looks valid") : "Problem";
+      cls = check.ok ? "ok" : "bad";
+    } else if (id === "tailscale") {
+      text = !state || state.phase === "starting" ? "" : ok ? "Running" : "Not running";
+      cls = ok ? "ok" : "bad";
+    } else if (id === "policy") {
+      text = ok ? "Marked done" : "";
+    } else {
+      text = ok ? "Saved" : "";
+    }
+    chip.textContent = text;
+    chip.className = `chipx ${cls}`;
+
+    const result = el.querySelector<HTMLElement>(".result");
+    if (result) {
+      if (check && (ok || id === "tailscale")) {
+        result.innerHTML = `<span class="${check.ok ? "ok" : "error"}">${check.ok ? "✓" : "✗"}</span> ${esc(check.message)}`;
+      } else if (id === "tailscale" && state?.tailscale_error) {
+        result.innerHTML = `<span class="error">✗</span> ${esc(state.tailscale_error)}`;
+      } else {
+        result.innerHTML = "";
+      }
+    }
+  }
+  $("#setup-count").textContent = `${done} of 4 done`;
+  $("#policy-done").textContent = settings?.policy_done ? "Mark as not done" : "Mark as done";
+  $("#policy-done").classList.toggle("pri", !settings?.policy_done);
+  const allOk = done === 4 && !!state?.keys_ready;
+  $("#go-connect").hidden = !(firstRun && allOk && report && report.tailscale.ok && report.vultr.ok && report.auth_key.ok);
+}
 
 async function loadKeys() {
   try {
     const keys = await invoke<Saved[]>("get_keys");
     for (const k of keys) {
+      savedKeys[k.name] = k.masked;
       const row = document.querySelector<HTMLElement>(`.key-row[data-key="${k.name}"]`);
       if (!row) continue;
-      row.querySelector(".key-value")!.textContent = k.masked ?? "Not set";
-      row.querySelector<HTMLButtonElement>(".remove")!.disabled = !k.masked;
+      row.querySelector(".key-value")!.textContent = k.masked ?? "";
+      row.querySelector<HTMLElement>(".saved")!.hidden = !k.masked;
+      row.querySelector<HTMLButtonElement>(".remove")!.hidden = !k.masked;
+      row.querySelector<HTMLInputElement>("input")!.placeholder = k.masked
+        ? "Paste a new key to replace it"
+        : k.name === "tailscale_auth_key"
+          ? "tskey-auth-…"
+          : "Paste the API key";
     }
   } catch (e) {
-    $("#key-msg").innerHTML = `<span class="error">${esc(String(e))}</span>`;
+    keyMsg(`<span class="error">${esc(String(e))}</span>`);
   }
+  renderChecklist();
+}
+
+function keyMsg(html: string) {
+  const el = $("#key-msg");
+  el.innerHTML = html;
+  el.hidden = !html;
 }
 
 function setupKeyForms() {
   document.querySelectorAll<HTMLElement>(".key-row").forEach((row) => {
     const name = row.dataset.key!;
-    const label = row.querySelector(".key-label")!.textContent;
+    const label = row.querySelector("input")!.getAttribute("aria-label")!;
     const input = row.querySelector("input")!;
     row.querySelector("form")!.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -311,9 +603,11 @@ function setupKeyForms() {
       try {
         await invoke("save_key", { name, value: input.value });
         input.value = "";
-        $("#key-msg").textContent = `Saved the ${label}.`;
+        report = null;
+        keyMsg(`Saved the ${label}.`);
+        openItem = undefined; // move on to the next step
       } catch (err) {
-        $("#key-msg").innerHTML = `<span class="error">${esc(String(err))}</span>`;
+        keyMsg(`<span class="error">${esc(String(err))}</span>`);
       }
       loadKeys();
     });
@@ -321,9 +615,10 @@ function setupKeyForms() {
       if (!confirm(`Remove the ${label} from this PC?`)) return;
       try {
         await invoke("delete_key", { name });
-        $("#key-msg").textContent = `Removed the ${label}.`;
+        report = null;
+        keyMsg(`Removed the ${label}.`);
       } catch (err) {
-        $("#key-msg").innerHTML = `<span class="error">${esc(String(err))}</span>`;
+        keyMsg(`<span class="error">${esc(String(err))}</span>`);
       }
       loadKeys();
     });
@@ -331,20 +626,20 @@ function setupKeyForms() {
 }
 
 async function testSetup() {
-  const table = $("#test-results");
   const btn = $<HTMLButtonElement>("#test");
   btn.disabled = true;
-  table.hidden = false;
-  table.innerHTML = "<tr><td>Testing…</td></tr>";
+  btn.textContent = "Testing…";
   try {
-    const r = await invoke<SetupReport>("test_setup");
-    const row = (name: string, c: Check) =>
-      `<tr><th>${name}</th><td><span class="${c.ok ? "ok" : "error"}">${c.ok ? "✓" : "✗"}</span> ${esc(c.message)}</td></tr>`;
-    table.innerHTML = row("Tailscale", r.tailscale) + row("Vultr API key", r.vultr) + row("Tailscale auth key", r.auth_key);
+    report = await invoke<SetupReport>("test_setup");
+    keyMsg("");
+    const firstBad = ITEMS.find((id) => testCheck(id)?.ok === false);
+    openItem = firstBad ?? openItem;
   } catch (e) {
-    table.innerHTML = `<tr><td class="error">${esc(String(e))}</td></tr>`;
+    keyMsg(`<span class="error">${esc(String(e))}</span>`);
   }
   btn.disabled = false;
+  btn.textContent = "Test setup";
+  renderChecklist();
 }
 
 async function loadSettings() {
@@ -352,11 +647,8 @@ async function loadSettings() {
   $<HTMLSelectElement>("#auto-hours").value = settings.auto_disconnect_hours == null ? "off" : String(settings.auto_disconnect_hours);
 }
 
-async function saveAutoHours() {
-  if (!settings) return;
-  const v = $<HTMLSelectElement>("#auto-hours").value;
-  settings.auto_disconnect_hours = v === "off" ? null : Number(v);
-  await act("save_settings", { settings });
+async function saveSettings() {
+  if (settings) await act("save_settings", { settings });
 }
 
 // ---------- quit dialog ----------
@@ -386,6 +678,7 @@ function onState(st: UiState) {
   if (firstState && st.phase !== "starting") {
     firstState = false;
     if (!st.keys_ready) {
+      firstRun = true;
       $("#welcome").hidden = false;
       showTab("settings");
     }
@@ -406,6 +699,20 @@ window.addEventListener("DOMContentLoaded", async () => {
       else if (a.href.startsWith("http")) openUrl(a.href);
       return;
     }
+    const country = t.closest<HTMLButtonElement>("button[data-country]");
+    if (country) selectCountry(country.dataset.country!);
+    const cityBtn = t.closest<HTMLButtonElement>("button[data-region]:not([data-action])");
+    if (cityBtn) {
+      selRegion = cityBtn.dataset.region!;
+      renderCountries();
+      render();
+    }
+    const head = t.closest<HTMLButtonElement>(".item > .r");
+    if (head) {
+      const id = head.parentElement!.dataset.item as ItemId;
+      openItem = openItem === id ? null : id;
+      renderChecklist();
+    }
     const btn = t.closest<HTMLButtonElement>("button[data-action]");
     if (btn) {
       const action = btn.dataset.action;
@@ -424,17 +731,37 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  $("#country").addEventListener("change", () => fillCities());
-  $("#city").addEventListener("change", render);
+  $("#search").addEventListener("input", renderCountries);
   $("#connect").addEventListener("click", () => {
-    const region = $<HTMLSelectElement>("#city").value;
-    const country = $<HTMLSelectElement>("#country").value;
-    if (region) connect(region, country);
+    const r = regionInfo(selRegion);
+    if (r) connect(r.id, r.country);
   });
-  $("#disconnect").addEventListener("click", () => act("disconnect"));
+  $("#disconnect").addEventListener("click", () => {
+    if (state?.phase === "connecting") cancelling = true;
+    render();
+    act("disconnect");
+  });
   $("#refresh").addEventListener("click", () => act("refresh"));
   $("#test").addEventListener("click", testSetup);
-  $("#auto-hours").addEventListener("change", saveAutoHours);
+  $("#go-connect").addEventListener("click", () => {
+    firstRun = false;
+    $("#welcome").hidden = true;
+    showTab("main");
+    render();
+  });
+  $("#policy-done").addEventListener("click", async () => {
+    if (!settings) return;
+    settings.policy_done = !settings.policy_done;
+    if (settings.policy_done && openItem === "policy") openItem = undefined;
+    await saveSettings();
+    renderChecklist();
+  });
+  $("#auto-hours").addEventListener("change", () => {
+    if (!settings) return;
+    const v = $<HTMLSelectElement>("#auto-hours").value;
+    settings.auto_disconnect_hours = v === "off" ? null : Number(v);
+    saveSettings();
+  });
   $("#quit-delete").addEventListener("click", () => quit(true));
   $("#quit-keep").addEventListener("click", () => quit(false));
   $("#quit-cancel").addEventListener("click", () => ($("#quit-dialog").hidden = true));
@@ -445,10 +772,14 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   $("#version").textContent = `VPN on Demand ${await getVersion()}`;
   await loadSettings();
+  await loadKeys();
   onState(await invoke<UiState>("get_state"));
   await loadCountries();
   render();
 
-  // Keep the timers on screen up to date.
-  setInterval(() => state?.phase === "connected" && renderDetails(state), 1000);
+  // Keep the clocks on screen up to date.
+  setInterval(() => {
+    if (state?.phase === "connected") renderTicks(state);
+    if (progress.plan && state) renderTimeline(state);
+  }, 1000);
 });

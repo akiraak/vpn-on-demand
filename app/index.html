@@ -9,38 +9,77 @@
   </head>
 
   <body>
-    <nav class="tabs">
-      <button data-tab="main" class="active">Connect</button>
-      <button data-tab="settings">Settings</button>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-pc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M12 16.5V20" /></g></symbol>
+        <symbol id="i-server" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="7" rx="1.5" /><rect x="4" y="13" width="16" height="7" rx="1.5" /></g><circle cx="8" cy="7.5" r="1.1" fill="currentColor" /><circle cx="8" cy="16.5" r="1.1" fill="currentColor" /></symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3.3 9h17.4M3.3 15h17.4" /></g></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+        <symbol id="i-cross" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" /></symbol>
+        <symbol id="i-chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></g></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></g></symbol>
+      </defs>
+    </svg>
+
+    <nav class="tabs" role="tablist">
+      <button data-tab="main" class="active" role="tab">Connect</button>
+      <button data-tab="settings" role="tab">Settings</button>
     </nav>
 
-    <!-- ===== Main ===== -->
+    <!-- ===== Connect ===== -->
     <section id="tab-main" class="tab">
       <div id="banners"></div>
 
-      <div class="card status-card">
-        <div class="status-line">
-          <span id="status-dot" class="dot"></span>
-          <span id="status-text">Starting…</span>
-          <button id="refresh" class="link-button" title="Check Vultr and Tailscale again">Refresh</button>
+      <div class="route" id="route">
+        <button id="refresh" class="icon-button" title="Check Vultr and Tailscale again" aria-label="Refresh">
+          <svg width="15" height="15"><use href="#i-refresh" /></svg>
+        </button>
+        <div class="lane">
+          <div class="node" id="n-pc"><span class="dot"><svg width="18" height="18"><use href="#i-pc" /></svg></span><b>This PC</b></div>
+          <div class="wire" id="w-1"></div>
+          <div class="node" id="n-server"><span class="dot"><svg width="18" height="18"><use href="#i-server" /></svg></span><b id="server-name">No server</b></div>
+          <div class="wire" id="w-2"></div>
+          <div class="node" id="n-net"><span class="dot"><svg width="18" height="18"><use href="#i-globe" /></svg></span><b>Internet</b></div>
         </div>
-        <p id="step" class="step" hidden></p>
-        <table id="details" class="details" hidden></table>
+        <p class="cap" id="route-cap">Checking Tailscale and Vultr…</p>
       </div>
 
-      <div class="card">
-        <div class="field">
-          <label for="country">Country</label>
-          <select id="country"><option>Loading…</option></select>
+      <!-- Disconnected: pick a country -->
+      <div id="picker" class="picker">
+        <div class="sec">Exit country</div>
+        <div class="list">
+          <label class="search">
+            <svg width="16" height="16"><use href="#i-search" /></svg>
+            <input id="search" type="search" placeholder="Search countries or cities" autocomplete="off" spellcheck="false" />
+          </label>
+          <div id="countries" class="countries" role="listbox" aria-label="Exit country">
+            <p class="empty">Loading the list of locations…</p>
+          </div>
         </div>
-        <div class="field">
-          <label for="city">City</label>
-          <select id="city"></select>
+      </div>
+
+      <!-- Connecting / disconnecting: progress -->
+      <ol id="timeline" class="tl" hidden></ol>
+
+      <!-- Connected: this session -->
+      <div id="session" class="session" hidden>
+        <div class="ipline">
+          <span class="muted">Public IP</span>
+          <span id="ip" class="ip"></span>
         </div>
-        <div class="actions">
-          <button id="connect" class="primary">Connect</button>
-          <button id="disconnect" class="danger" hidden>Disconnect</button>
+        <div class="sec">This session</div>
+        <div class="tiles">
+          <div><span>Running</span><b id="t-running">–</b></div>
+          <div><span>Cost so far</span><b id="t-cost">–</b><small id="t-rate"></small></div>
+          <div><span>Auto-off in</span><b id="t-auto">–</b><button class="link-button" id="t-reset" data-action="extend">Reset</button></div>
         </div>
+      </div>
+
+      <div class="grow"></div>
+      <div class="bottom">
+        <button id="connect" class="btn primary">Connect</button>
+        <button id="disconnect" class="btn outline danger" hidden>Disconnect and delete the server</button>
         <p class="hint" id="cost-hint"></p>
       </div>
     </section>
@@ -48,103 +87,145 @@
     <!-- ===== Settings ===== -->
     <section id="tab-settings" class="tab" hidden>
       <div id="welcome" class="banner info" hidden>
-        <strong>Welcome!</strong> To get started, follow the four setup steps below. It takes about
-        10 minutes, once.
+        <strong>Welcome!</strong> Finish these four steps to start. It takes about 10 minutes, once.
       </div>
 
-      <h2>Keys</h2>
-      <p class="hint">
-        Keys are stored in your operating system's credential store (Windows Credential Manager /
-        macOS Keychain), never in a file.
-      </p>
-      <div class="card" id="keys">
-        <div class="key-row" data-key="vultr_api_key">
-          <div class="key-head">
-            <span class="key-label">Vultr API key</span>
-            <code class="key-value">…</code>
+      <div class="prog">
+        <h2>Setup checklist</h2>
+        <span id="setup-count" class="muted"></span>
+      </div>
+      <div class="acc" id="checklist">
+        <!-- 1. Tailscale -->
+        <div class="item" data-item="tailscale">
+          <button class="r" aria-expanded="false">
+            <span class="m"></span>
+            <span class="title">Tailscale is installed and signed in</span>
+            <span class="chipx"></span>
+            <svg class="chev" width="16" height="16"><use href="#i-chev" /></svg>
+          </button>
+          <div class="detail">
+            <p>
+              Get Tailscale from <a href="https://tailscale.com/download">tailscale.com/download</a>,
+              install it and sign in. This app switches Tailscale's exit node; it doesn't install a VPN
+              driver of its own.
+            </p>
+            <p class="result"></p>
           </div>
-          <form class="key-form">
-            <input type="password" placeholder="Paste a new key" autocomplete="off" spellcheck="false" />
-            <button type="submit">Save</button>
-            <button type="button" class="remove">Remove</button>
-          </form>
         </div>
-        <div class="key-row" data-key="tailscale_auth_key">
-          <div class="key-head">
-            <span class="key-label">Tailscale auth key</span>
-            <code class="key-value">…</code>
-          </div>
-          <form class="key-form">
-            <input type="password" placeholder="tskey-auth-…" autocomplete="off" spellcheck="false" />
-            <button type="submit">Save</button>
-            <button type="button" class="remove">Remove</button>
-          </form>
-        </div>
-        <p id="key-msg" class="hint"></p>
-        <div class="actions">
-          <button id="test">Test setup</button>
-        </div>
-        <table id="test-results" class="details" hidden></table>
-      </div>
 
-      <h2>Auto-disconnect</h2>
-      <div class="card">
-        <div class="field">
-          <label for="auto-hours">Disconnect and delete the server after</label>
-          <select id="auto-hours">
-            <option value="1">1 hour</option>
-            <option value="2">2 hours</option>
-            <option value="3">3 hours</option>
-            <option value="4">4 hours</option>
-            <option value="6">6 hours</option>
-            <option value="8">8 hours</option>
-            <option value="12">12 hours</option>
-            <option value="24">24 hours</option>
-            <option value="off">Never (not recommended)</option>
-          </select>
-        </div>
-        <p class="hint">
-          Vultr bills every hour the server exists, even when it's idle. You get a notification 10
-          minutes before.
-        </p>
-      </div>
-
-      <h2>Setup guide</h2>
-      <ol class="guide">
-        <li>
-          <strong>Install Tailscale and sign in.</strong>
-          Get it from <a href="https://tailscale.com/download">tailscale.com/download</a>. This app
-          switches Tailscale's exit node; it doesn't install any VPN driver of its own.
-        </li>
-        <li>
-          <strong>Allow the app's servers in your tailnet policy.</strong>
-          Open <a href="https://login.tailscale.com/admin/acls/file">Access controls</a> and add these
-          two sections (merge them if they already exist). <code>autoApprovers</code> lets each new
-          server become an exit node without manual approval.
-          <pre id="policy">"tagOwners": {
+        <!-- 2. Policy -->
+        <div class="item" data-item="policy">
+          <button class="r" aria-expanded="false">
+            <span class="m"></span>
+            <span class="title">Your tailnet policy allows the app's servers</span>
+            <span class="chipx"></span>
+            <svg class="chev" width="16" height="16"><use href="#i-chev" /></svg>
+          </button>
+          <div class="detail">
+            <p>
+              Open <a href="https://login.tailscale.com/admin/acls/file">Access controls</a> and add these
+              two sections (merge them if they already exist). <code>autoApprovers</code> lets each new
+              server become an exit node without approving it by hand.
+            </p>
+            <pre id="policy">"tagOwners": {
   "tag:vpn-on-demand": ["autogroup:admin"]
 },
 "autoApprovers": {
   "exitNode": ["tag:vpn-on-demand"]
 }</pre>
-          <button class="copy" data-copy="policy">Copy</button>
-        </li>
-        <li>
-          <strong>Create a Tailscale auth key.</strong>
-          Open <a href="https://login.tailscale.com/admin/settings/keys">Settings → Keys</a> →
-          <em>Generate auth key</em>. Turn on <em>Reusable</em> and <em>Ephemeral</em>, add the tag
-          <code>tag:vpn-on-demand</code>, and pick an expiration (up to 90 days). Paste it above.
-        </li>
-        <li>
-          <strong>Create a Vultr API key.</strong>
-          Sign up at <a href="https://www.vultr.com/">vultr.com</a> and add a payment method. Then
-          open <a href="https://my.vultr.com/settings/#settingsapi">Account → API</a>, enable the API,
-          and under <em>Access Control</em> choose <em>Allow all IPv4</em> and
-          <em>Allow all IPv6</em> (while connected, your traffic leaves from the server's address,
-          so a home-IP-only rule would block the app). Paste the key above, then press
-          <em>Test setup</em>.
-        </li>
-      </ol>
+            <div class="row">
+              <button class="sm" data-copy="policy">Copy</button>
+              <button class="sm pri" id="policy-done">Mark as done</button>
+            </div>
+            <p class="hint">The app can't read your policy, so mark this step yourself when you've saved it.</p>
+          </div>
+        </div>
+
+        <!-- 3. Tailscale auth key -->
+        <div class="item key-row" data-item="tailscale_auth_key" data-key="tailscale_auth_key">
+          <button class="r" aria-expanded="false">
+            <span class="m"></span>
+            <span class="title">Create a Tailscale auth key</span>
+            <span class="chipx"></span>
+            <svg class="chev" width="16" height="16"><use href="#i-chev" /></svg>
+          </button>
+          <div class="detail">
+            <p>
+              Open <a href="https://login.tailscale.com/admin/settings/keys">Settings → Keys</a> →
+              <em>Generate auth key</em>, then:
+            </p>
+            <ul>
+              <li>Turn on <b>Reusable</b> and <b>Ephemeral</b></li>
+              <li>Add the tag <code>tag:vpn-on-demand</code></li>
+              <li>Pick an expiration (up to 90 days)</li>
+            </ul>
+            <p class="saved">Saved key: <code class="key-value">…</code></p>
+            <form class="key-form">
+              <input type="password" placeholder="tskey-auth-…" autocomplete="off" spellcheck="false" aria-label="Tailscale auth key" />
+              <button type="submit" class="sm pri">Save</button>
+              <button type="button" class="sm remove">Remove</button>
+            </form>
+            <p class="result"></p>
+          </div>
+        </div>
+
+        <!-- 4. Vultr API key -->
+        <div class="item key-row" data-item="vultr_api_key" data-key="vultr_api_key">
+          <button class="r" aria-expanded="false">
+            <span class="m"></span>
+            <span class="title">Create a Vultr API key</span>
+            <span class="chipx"></span>
+            <svg class="chev" width="16" height="16"><use href="#i-chev" /></svg>
+          </button>
+          <div class="detail">
+            <p>
+              Sign up at <a href="https://www.vultr.com/">vultr.com</a> and add a payment method. Then open
+              <a href="https://my.vultr.com/settings/#settingsapi">Account → API</a>, enable the API, and:
+            </p>
+            <ul>
+              <li>Under <em>Access Control</em>, choose <b>Allow all IPv4</b> and <b>Allow all IPv6</b>.
+                While connected, your traffic leaves from the server's address, so a home-IP-only rule
+                would block the app.</li>
+            </ul>
+            <p class="saved">Saved key: <code class="key-value">…</code></p>
+            <form class="key-form">
+              <input type="password" placeholder="Paste the API key" autocomplete="off" spellcheck="false" aria-label="Vultr API key" />
+              <button type="submit" class="sm pri">Save</button>
+              <button type="button" class="sm remove">Remove</button>
+            </form>
+            <p class="result"></p>
+          </div>
+        </div>
+      </div>
+      <p id="key-msg" class="hint" hidden></p>
+      <div class="actions">
+        <button id="test" class="btn outline">Test setup</button>
+        <button id="go-connect" class="btn primary" hidden>Go to Connect</button>
+      </div>
+      <p class="hint">
+        Keys are stored in your operating system's credential store (Windows Credential Manager /
+        macOS Keychain), never in a file.
+      </p>
+
+      <h2>Auto-disconnect</h2>
+      <div class="card">
+        <label for="auto-hours" class="label">Disconnect and delete the server after</label>
+        <select id="auto-hours">
+          <option value="1">1 hour</option>
+          <option value="2">2 hours</option>
+          <option value="3">3 hours</option>
+          <option value="4">4 hours</option>
+          <option value="6">6 hours</option>
+          <option value="8">8 hours</option>
+          <option value="12">12 hours</option>
+          <option value="24">24 hours</option>
+          <option value="off">Never (not recommended)</option>
+        </select>
+        <p class="hint">
+          Vultr bills every hour the server exists, even when it's idle. You get a notification 10
+          minutes before.
+        </p>
+      </div>
 
       <p class="hint about">
         <span id="version"></span> ·
@@ -154,16 +235,15 @@
 
     <!-- ===== Quit dialog ===== -->
     <div id="quit-dialog" class="modal" hidden>
-      <div class="modal-box">
-        <h2>A server is still running</h2>
-        <p>
-          It keeps costing money until it is deleted. Delete it before quitting?
-        </p>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="quit-title">
+        <span class="modal-icon"><svg width="20" height="20"><use href="#i-server" /></svg></span>
+        <h2 id="quit-title">A server is still running</h2>
+        <p>It keeps costing money until it's deleted. Delete it before quitting?</p>
         <p id="quit-error" class="error" hidden></p>
         <div class="actions column">
-          <button id="quit-delete" class="primary">Delete the server and quit</button>
-          <button id="quit-keep">Quit and keep it running</button>
-          <button id="quit-cancel">Cancel</button>
+          <button id="quit-delete" class="btn primary">Delete the server and quit</button>
+          <button id="quit-keep" class="btn outline">Quit and keep it running</button>
+          <button id="quit-cancel" class="btn plain">Cancel</button>
         </div>
       </div>
     </div>
