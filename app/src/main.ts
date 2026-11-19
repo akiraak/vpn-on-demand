@@ -70,6 +70,11 @@ let firstRun = false;
 let selCountry = "JP";
 let selRegion = "nrt";
 let cancelling = false;
+/** The location list is open (it replaces the Connect screen). */
+let picking = false;
+/** The place chosen before the list was opened, restored by Back / Esc. */
+let beforePick: { country: string; region: string } | null = null;
+let countriesError = false;
 
 function regionInfo(id: string): Region | undefined {
   for (const c of countries) {
@@ -377,7 +382,12 @@ function render() {
   renderSession(st);
 
   const busy = st.phase === "connecting" || st.phase === "disconnecting" || st.phase === "starting";
-  $("#picker").hidden = !(st.phase === "disconnected" || st.phase === "starting");
+  const off = st.phase === "disconnected" || st.phase === "starting";
+  if (!off) picking = false; // e.g. connecting from the tray while the list is open
+  $("#picker").hidden = !picking;
+  $("#location").hidden = !off || picking;
+  for (const sel of ["#banners", "#route", "#tab-main > .grow", "#tab-main > .bottom"]) $(sel).hidden = picking;
+  renderLocation(busy);
   const connectBtn = $<HTMLButtonElement>("#connect");
   const disconnectBtn = $<HTMLButtonElement>("#disconnect");
   connectBtn.hidden = !(st.phase === "disconnected" || st.phase === "starting");
@@ -407,6 +417,43 @@ function render() {
   }
 
   renderChecklist();
+}
+
+// ---------- exit location ----------
+
+function renderLocation(busy: boolean) {
+  const r = regionInfo(selRegion);
+  $("#loc-cc").textContent = r?.country ?? "";
+  $("#loc-name").innerHTML = r
+    ? `${esc(nameOf(r.country))} <span>· ${esc(r.city)}</span>`
+    : countriesError
+      ? "Couldn't load the list"
+      : "Loading…";
+  $<HTMLButtonElement>("#change").disabled = busy || !countries.length;
+}
+
+function openPicker() {
+  beforePick = { country: selCountry, region: selRegion };
+  picking = true;
+  $<HTMLInputElement>("#search").value = "";
+  renderCountries();
+  render();
+  scrollToSelected();
+  $<HTMLInputElement>("#search").focus();
+}
+
+/** Closes the list; `revert` puts back the place chosen before it opened. */
+function closePicker(revert: boolean) {
+  if (!picking) return;
+  if (revert && beforePick) {
+    selCountry = beforePick.country;
+    selRegion = beforePick.region;
+    renderCountries();
+  }
+  picking = false;
+  beforePick = null;
+  render();
+  $<HTMLButtonElement>("#change").focus();
 }
 
 // ---------- country list ----------
@@ -465,6 +512,8 @@ async function loadCountries() {
     countries = await invoke<Country[]>("list_countries");
   } catch (e) {
     $("#countries").innerHTML = `<p class="empty">Couldn't load the list.</p>`;
+    countriesError = true;
+    render();
     $("#banners").insertAdjacentHTML("afterbegin", banner("error", `Couldn't load the list of locations from Vultr: ${esc(String(e))}`));
     return;
   }
@@ -473,7 +522,6 @@ async function loadCountries() {
   selCountry = countries.some((c) => c.code === lastCountry) ? lastCountry : (countries[0]?.code ?? "");
   selRegion = settings?.last_region ?? "";
   selectCountry(selCountry);
-  scrollToSelected();
 }
 
 async function act(cmd: string, args?: Record<string, unknown>) {
@@ -700,12 +748,17 @@ window.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     const country = t.closest<HTMLButtonElement>("button[data-country]");
-    if (country) selectCountry(country.dataset.country!);
+    if (country) {
+      const code = country.dataset.country!;
+      selectCountry(code);
+      // One city: that's the choice. Several: wait for a city.
+      if (countries.find((c) => c.code === code)?.regions.length === 1) closePicker(false);
+    }
     const cityBtn = t.closest<HTMLButtonElement>("button[data-region]:not([data-action])");
     if (cityBtn) {
       selRegion = cityBtn.dataset.region!;
       renderCountries();
-      render();
+      closePicker(false);
     }
     const head = t.closest<HTMLButtonElement>(".item > .r");
     if (head) {
@@ -732,6 +785,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   $("#search").addEventListener("input", renderCountries);
+  $("#change").addEventListener("click", openPicker);
+  $("#picker-back").addEventListener("click", () => closePicker(true));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && picking) closePicker(true);
+  });
   $("#connect").addEventListener("click", () => {
     const r = regionInfo(selRegion);
     if (r) connect(r.id, r.country);

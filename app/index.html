@@ -16,6 +16,7 @@
         <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3.3 9h17.4M3.3 15h17.4" /></g></symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" /></symbol>
         <symbol id="i-cross" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" /></symbol>
+        <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></symbol>
         <symbol id="i-chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></symbol>
         <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></g></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></g></symbol>
@@ -45,9 +46,20 @@
         <p class="cap" id="route-cap">Checking Tailscale and Vultr…</p>
       </div>
 
-      <!-- Disconnected: pick a country -->
-      <div id="picker" class="picker">
-        <div class="sec">Exit country</div>
+      <!-- Disconnected: the chosen place, one row -->
+      <div id="location" class="locrow">
+        <span class="lbl">Exit location</span>
+        <span class="cc" id="loc-cc"></span>
+        <span class="v" id="loc-name">Loading…</span>
+        <button id="change" class="sm">Change</button>
+      </div>
+
+      <!-- Change: the list replaces the screen under the tabs -->
+      <div id="picker" class="picker" hidden>
+        <div class="sheethead">
+          <button id="picker-back" class="back" aria-label="Back"><svg width="16" height="16"><use href="#i-back" /></svg>Back</button>
+          <h2>Choose an exit location</h2>
+        </div>
         <div class="list">
           <label class="search">
             <svg width="16" height="16"><use href="#i-search" /></svg>
