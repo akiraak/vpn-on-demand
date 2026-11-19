@@ -159,6 +159,43 @@ Phase 2 と並べて比べる。調べるだけで、アカウントは作らな
 - **Tailscale を使わない経路**: たとえば WireGuard を直接使う。Tailscale の参加と承認の待ちは無くなるが、PC に WireGuard のクライアントが要るので、「専用の VPN クライアントを入れない」方針と合わない。調べたうえで、方針を変える価値があるかをユーザーに聞く
 - **常に動かしておく**: いちばん速い（数秒）が、月額がかかる（Vultr の最小で月 $5 ほど）。比べる基準として載せる
 
+#### Phase 3 の結果（2026-11-18、Web の調査だけ。アカウントは作っていない）
+
+4 つに分けて調べた: (1) マイクロ VM / コンテナ、(2) 大手クラウドの止めておける VM、(3) 日本の事業者とほかの VPS、(4) VM を立てない方法。数字は各社の公式のページと第三者の記事から取った。**未確認**と書いたものは実際に試さないと分からない。
+
+**比べる表**（転送量の料金は、動画 1 時間 = 約 3〜5 GB で見積もった）
+
+| 候補 | 接続までの見込み | 使わない月 | 動いている間 | 転送量 | 日本 / ほかの国 | 合い方と弱点 |
+|---|---|---|---|---|---|---|
+| **今: Vultr（毎回作って消す）** | 約 90 秒（実測） | 0 | $0.007/時 | 月 2 TB 込み（按分） | 東京ほか約 30 か国 | 3 サイトで見られることを確かめ済み。VM の用意が遅く、ばらつく |
+| **Fly.io Machines（止めておいて start）** | **数秒〜十数秒**（止めたマシンの start は「たいてい 1 秒未満」と公式。Tailscale の再接続を足す。**未確認**） | rootfs が $0.15/GB/月なので月 $0.1 未満 | 東京 約 $0.004/時（秒単位） | **$0.04/GB**（1 時間 約 $0.12〜0.2） | 東京（nrt）ほか多数 | `/dev/net/tun` があり、出口ノードが動いた実例がある。外向きの IP は共有で変わりうる（固定は月 $3.60）。**Fly の IP が米国と判定された報告がある**（2026-07 に geofeed を出して直している途中）。止めたマシンはホストに空きが無いと start に失敗するので、作り直しへの切り替えが要る。トークンはアプリ単位に絞れる |
+| **Tailscale の Mullvad 出口ノード**（アドオン） | **数秒**（出口を切り替えるだけ） | **月 $5**（5 台まで。時間課金なし） | 0 | 0 | 東京 4 台、大阪 3 台、50 か国 | 今の `tailscale set --exit-node=` がそのまま使え、VM もキーも要らない。**VPN 業者向けの IP 帯なので配信サイトに止められやすい**（Netflix はほぼ全部止めているという報告。日本の 3 サイトは報告なし）。使わない月 0 円が守れない |
+| **自宅や知人宅の機器**（Apple TV、Raspberry Pi、GL.iNet のルーターなど） | 数秒 | 電気代（Pi で月 100〜150 円） | 0 | 0 | その機器のある国だけ | **住宅の IP なので配信サイトに一番強い**。日本に機器と人が要り、だれでも使えるわけではない。知人の機器はノードの共有で借りられる |
+| **Oracle Cloud の Always Free**（常に動かしておく） | 数秒（いつも動いている） | **0** | 0 | 月 10 TB まで 0 | ホームリージョン 1 つだけ（東京か大阪） | 費用はいちばん良い。登録でカードが通らない、空きが無い、使っていないと回収されるという報告が多く、一般の人には難しい。日本以外は選べない |
+| AWS EC2（止めておいて start） | 数十秒の見込み（新規の作成は約 20 秒の計測あり。止めた VM の start は**未確認**） | 約 $0.77/月（ディスク 8 GB） | 約 $0.010/時（IPv4 代を含む） | **$0.114/GB**（月 100 GB を超えた分。1 時間 約 $0.5） | 東京ほか多数 | 権限をいちばん細かく絞れる（タグの付いた VM の start / stop だけ）。転送量が高い。Prime Video は Amazon のもので、AWS の IP を止める可能性（推測） |
+| Google Cloud（止めておいて start） | 数十秒の見込み（**未確認**） | 約 $0.5/月 | 約 $0.016/時 | Standard Tier なら月 200 GiB まで 0、超えると $0.085/GiB | 東京、大阪ほか多数 | 手順（プロジェクト、課金、サービスアカウントの JSON）が重い |
+| さくらのクラウド（止めておいて起動） | **未確認** | ディスクの料金だけ（20 GB で石狩 ¥440、東京 ¥770/月） | 約 ¥7〜8/時 | 0 | 日本だけ | 止めている間のサーバー料金は無料。海外のカードや住所で登録できるかは**未確認** |
+| Azure | 数分という記述あり | ディスクと IP で $1/月を超える | — | $0.11〜0.12/GB | — | 合わない |
+| ConoHa、Linode、WebARENA Indigo、Kamatera | 作成は Vultr と同じか遅い | 止めても課金（Indigo は月 ¥449 が上限） | — | — | — | 速くならない。Hetzner、DigitalOcean、UpCloud は日本のリージョンが無い |
+| プロキシ（住宅のプロキシ、サーバーレス）、商用 VPN の WireGuard 設定 | — | — | 住宅のプロキシは 1 GB $1〜10 | — | — | 費用か方針（専用のクライアントを入れない、経路は Tailscale）に合わない |
+
+分かったこと:
+
+- **VM を「作る」限り、Vultr より大きく速いところは見つからなかった。** 第三者の計測でも、作成の時間は Vultr（中央値 60 秒）が速いほう。速くするには「止めておいて start する」か「VM を立てない」のどちらかになる
+- **止めておく方式の本命は Fly.io。** 起動が速く、止めている間はほぼ 0 円で、国も選べる。弱点は (1) 転送量の料金（動画 1 時間で 10〜20 セント。Vultr の数十倍）、(2) 国の判定と配信サイトに止められないかが分からないこと。どちらも実際に試さないと分からない
+- **VM を立てない本命は Mullvad のアドオン。** アプリの変更がいちばん小さい（出口を選ぶだけ）。ただし月 $5 の固定費がかかり、VPN 業者の IP なので、日本の 3 サイトで見られるかがいちばん怪しい
+- **配信サイトに強いのは住宅の IP（自宅や知人宅の機器）だけ。** だれでも使える方法ではないが、「すでにある出口ノードを選ぶ」機能として足す価値がある
+- 止めておく方式にすると、変わることがある: VM がずっと残る（auth key や Tailscale の状態が VM の中に残る）、Tailscale のノードが Ephemeral でなくなる（ノードの鍵の期限を切る設定も要る）、「アプリが落ちたら VPS を消す」という今の課金の守り方が「止める」に変わる
+- 方針の「使わない月は（ほぼ）0 円」「誰でも README を見て使える」「専用の VPN クライアントを入れない」に照らすと、Fly.io は 3 つとも守れる見込み。Mullvad は 1 つ目、Oracle は 2 つ目、自宅の機器は 2 つ目が守れない
+
+主な出典:
+
+- Fly.io: [Machines の概要](https://docs.fly.io/machines/overview)、[料金](https://fly.io/pricing.md)、[2026-10 からの料金](https://fly.io/pricing-update/)、[外向きの IP](https://docs.fly.io/networking/egress-ips)、[国の判定の報告（2026-07）](https://community.fly.io/t/dedicated-egress-ip-on-fra-machine-still-geolocates-to-us-follow-up-to-closed-topic-26025/28309)、[出口ノードの実例](https://github.com/patte/fly-tailscale-exit)、[トークン](https://docs.fly.io/security/tokens/)
+- Mullvad のアドオン: [Tailscale の文書](https://tailscale.com/docs/features/exit-nodes/mullvad-exit-nodes)、[料金](https://tailscale.com/mullvad)
+- 自宅の機器: [Apple TV](https://tailscale.com/docs/install/appletv)、[ノードの共有](https://tailscale.com/docs/features/sharing)
+- 大手クラウド: [EC2 の停止と起動](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/how-ec2-instance-stop-start-works.html)、[EC2 の起動時間の計測（2021）](http://www.daemonology.net/blog/2021-08-12-EC2-boot-time-benchmarking.html)、[GCP の停止と一時停止](https://docs.cloud.google.com/compute/docs/instances/suspend-stop-reset-instances-overview)、[GCP のネットワーク料金](https://cloud.google.com/vpc/network-pricing)、[OCI の Always Free](https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm)
+- 日本の事業者ほか: [さくら、停止中の無料化（2017-03）](https://www.sakura.ad.jp/corporate/wp-content/uploads/2017/10/20170309_server_charge.pdf)、[さくら、ディスクの料金](https://cloud.sakura.ad.jp/products/disk/)、[ConoHa の停止中の課金](https://support.conoha.jp/common/faq/payment-q/billing-q/)、[作成時間の計測](https://www.vpsbenchmarks.com/labs/provisioning_times)
+
 ### Phase 4: 決めて作る
 
 - Phase 1〜3 の結果を表にまとめ、ユーザーと方式を決める
