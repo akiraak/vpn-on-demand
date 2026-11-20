@@ -20,11 +20,17 @@
 
 ## Windows 版の仕上げ
 
-- [ ] ドキュメントを整備する（README を読めば、だれでもインストールして使える状態にする）
+- [~] ドキュメントを整備する（README を読めば、だれでもインストールして使える状態にする） [plan](docs/plans/docs.md)
   - 派生元: 「Windows 版を完成させる」（2026-11-17 に完了。[plan](docs/plans/archive/windows-app.md)）
   - README（英語）: 何ができるか、用意するもの（Vultr、Tailscale）、tailnet のポリシー、キーの作り方、インストール（SmartScreen の警告の越え方）、使い方、費用、困ったとき、片付け（アンインストール、キーの削除）
   - 配布: GitHub Actions でインストーラをビルドして下書きの Release を作り、sx360 で試作と開発版をアンインストールしてから、README だけを見て入れて使う。問題が無ければ公開する（Release の公開はユーザーに確認する）
   - 開発者向けのビルドの手順は CLAUDE.md の「開発環境」に書いた（2026-11-18）。README には要点だけ書いてリンクする
+  - [x] Step 1: README（英語）を書く
+    - 2026-11-19: 書いた。画像は Step 3 で撮って足す
+  - [x] Step 2: GitHub Actions でインストーラを作り、下書きの Release に添付するワークフローを書く
+    - 2026-11-19: `.github/workflows/release.yml` を書いた。動かすのは Step 3（タグを push したとき）
+  - [ ] Step 3: `v0.1.0` の下書きの Release を作り、sx360 で README だけを見て入れて通しで使う。README の画像を撮る
+  - [ ] Step 4: Release を公開する（ユーザーに確認する）
 
 ## 消し忘れの対策（課金）
 
