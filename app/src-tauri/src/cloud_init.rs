@@ -118,6 +118,8 @@ mod tests {
         ));
     }
 
+    // Unix only: on Windows `bash` can be the WSL launcher, which fails without a distribution.
+    #[cfg(unix)]
     #[test]
     fn script_is_valid_bash() {
         let s = script("tskey-auth-abc123-XYZ", "vpn-on-demand-nrt").unwrap();
