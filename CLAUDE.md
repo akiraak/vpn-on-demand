@@ -100,6 +100,8 @@ npm run tauri build -- --runner cargo-xwin --target x86_64-pc-windows-msvc --bun
 ```
 
 - アイコンのファイルを替えたときは、`touch src-tauri/build.rs` してからビルドする（しないと exe のアイコンが古いまま残る）
+- **リリース**: `app/src-tauri/tauri.conf.json`、`app/src-tauri/Cargo.toml`、`app/package.json` の版を上げてコミットし、`v<version>` のタグを push する。GitHub Actions（`.github/workflows/release.yml`）がインストーラを作り、下書きの Release に添付する（約 11 分）。下書きを確かめてから公開する。タグの push と Release の公開は、前にユーザーに確認する
+- README の画像（`docs/images/`）は、sx360 のアプリのウィンドウを PowerShell の `PrintWindow` で撮った（撮り方は `docs/plans/archive/docs.md` の「進み具合」）。画面を変えたら撮り直す
 - sx360 で確かめるときは、インストーラを Windows の `%TEMP%` に写して `/S` で入れる（ユーザー単位で `%LOCALAPPDATA%\VPN on Demand\` に入る。管理者の権限は要らない）。接続中でないことを確かめてから、動いているアプリを止めて入れ直す
 
 ## 注意が必要な操作

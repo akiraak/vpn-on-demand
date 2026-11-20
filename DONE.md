@@ -1,5 +1,13 @@
 # DONE
 
+## 2026-11-19
+
+- [x] ドキュメントを整備する（README を読めば、だれでもインストールして使える状態にする） [plan](docs/plans/archive/docs.md)
+  - README（英語）を書いた。しくみ、費用、セットアップの 6 手順、使い方、消し忘れの確かめ方、困ったとき、入れ替え、片付け、セキュリティ、ビルド。アプリの画面の画像を 3 枚載せた
+  - `.github/workflows/release.yml`: `v*` のタグを push すると、GitHub Actions（`windows-latest`）で単体テストを通してからインストーラを作り、下書きの Release に添付する
+  - `v0.1.0` を公開した（https://github.com/akiraak/vpn-on-demand/releases/tag/v0.1.0）。公開の前に、sx360 でアプリ、設定、キーを消してから Release のインストーラで入れ直し、東京に接続して U-NEXT と TVer が見られ、切断で VPS が消えることを確かめた
+  - 分かったこと: Windows のランナーの `bash` は WSL の起動役なので、bash を呼ぶテストは Unix だけにした。アンインストーラは `%LOCALAPPDATA%\io.github.akiraak.vpn-on-demand`（画面のキャッシュ）を消さない
+
 ## 2026-11-18
 
 - [x] 接続までの時間を速くする方法を探す（根本的な技術の見直しも含める） [plan](docs/plans/archive/connect-speed.md)

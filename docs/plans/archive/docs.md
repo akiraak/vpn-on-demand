@@ -6,7 +6,7 @@
 
 今の README は 2 行だけで、インストーラは手元の WSL でしか作れない。README を書き、インストーラを GitHub Actions で作って Releases で配る。
 
-派生元: 「Windows 版を完成させる」の Phase 6 と Phase 7（[プラン](archive/windows-app.md)）
+派生元: 「Windows 版を完成させる」の Phase 6 と Phase 7（[プラン](windows-app.md)）
 
 ## 対応方針
 
@@ -66,7 +66,8 @@
 
 - 2026-11-19: プランを作った
 - 2026-11-19: Step 1 と Step 2。README を書き、`.github/workflows/release.yml` を書いた。README の内容はアプリの文言、テスト名（接続に失敗したら VPS を消す、など）、Vultr の公開 API（33 都市、20 か国、最小プランは $0.007/時）に突き合わせた。ワークフローはまだ動かしていない（Step 3 でタグを push して確かめる）
-- 2026-11-20: Step 3 の前半。`v0.1.0` のタグを push した。1 回目の Actions は単体テスト `script_is_valid_bash` で失敗した（`windows-latest` の `bash` は WSL の起動役で、ディストリビューションが無くて失敗する）。テストを Unix だけにし、タグを付け直して 2 回目で成功した（約 11 分）。下書きの Release に `VPN.on.Demand_0.1.0_x64-setup.exe`（2.2 MB）が付いた。README に書いたファイル名と同じ。残りは sx360 での入れ直しと通しの確認、画像
-- 2026-11-20: Step 3 の後半。sx360 で開発版をアンインストールし、設定のフォルダと資格情報マネージャーのキー 2 つを消してから、ユーザーが下書きの Release のインストーラで入れ直した。キーを入れて東京に接続し、U-NEXT と TVer が見られた。切断のあと、Vultr に VPS が無いことと、出口ノードが外れたことを確かめた
+- 2026-11-19: Step 3 の前半。`v0.1.0` のタグを push した。1 回目の Actions は単体テスト `script_is_valid_bash` で失敗した（`windows-latest` の `bash` は WSL の起動役で、ディストリビューションが無くて失敗する）。テストを Unix だけにし、タグを付け直して 2 回目で成功した（約 11 分）。下書きの Release に `VPN.on.Demand_0.1.0_x64-setup.exe`（2.2 MB）が付いた。README に書いたファイル名と同じ。残りは sx360 での入れ直しと通しの確認、画像
+- 2026-11-19: Step 3 の後半。sx360 で開発版をアンインストールし、設定のフォルダと資格情報マネージャーのキー 2 つを消してから、ユーザーが下書きの Release のインストーラで入れ直した。キーを入れて東京に接続し、U-NEXT と TVer が見られた。切断のあと、Vultr に VPS が無いことと、出口ノードが外れたことを確かめた
   - アンインストーラは `%LOCALAPPDATA%\io.github.akiraak.vpn-on-demand`（画面のキャッシュ）を消さないと分かったので、README の片付けの手順に足した
   - 画像: Claude Code から PowerShell でアプリのウィンドウだけを撮った（`PrintWindow`。ボタンは WebView のウィンドウにクリックのメッセージを送って押すので、マウスは動かない）。未接続、接続中、Settings の 3 枚を `docs/images/` に置いて README に載せた。接続中の画面のために東京にもう 1 回接続し、切断して VPS が消えたことを確かめた。SmartScreen の警告は撮っていない（文章だけ）
+- 2026-11-19: Step 4。ユーザーの確認を得て Release `v0.1.0` を公開した。README の `releases/latest` のリンクと、インストーラのダウンロード（2.2 MB）が開くことを確かめた。SmartScreen の警告の画像は TODO に残した

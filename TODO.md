@@ -20,18 +20,8 @@
 
 ## Windows 版の仕上げ
 
-- [~] ドキュメントを整備する（README を読めば、だれでもインストールして使える状態にする） [plan](docs/plans/docs.md)
-  - 派生元: 「Windows 版を完成させる」（2026-11-17 に完了。[plan](docs/plans/archive/windows-app.md)）
-  - README（英語）: 何ができるか、用意するもの（Vultr、Tailscale）、tailnet のポリシー、キーの作り方、インストール（SmartScreen の警告の越え方）、使い方、費用、困ったとき、片付け（アンインストール、キーの削除）
-  - 配布: GitHub Actions でインストーラをビルドして下書きの Release を作り、sx360 で試作と開発版をアンインストールしてから、README だけを見て入れて使う。問題が無ければ公開する（Release の公開はユーザーに確認する）
-  - 開発者向けのビルドの手順は CLAUDE.md の「開発環境」に書いた（2026-11-18）。README には要点だけ書いてリンクする
-  - [x] Step 1: README（英語）を書く
-    - 2026-11-19: 書いた。画像は Step 3 で撮って足す
-  - [x] Step 2: GitHub Actions でインストーラを作り、下書きの Release に添付するワークフローを書く
-    - 2026-11-19: `.github/workflows/release.yml` を書いた。動かすのは Step 3（タグを push したとき）
-  - [x] Step 3: `v0.1.0` の下書きの Release を作り、sx360 で README だけを見て入れて通しで使う。README の画像を撮る
-    - 2026-11-20: 下書きの Release ができた（Actions で約 11 分）。sx360 でまっさらな状態から入れ直し、東京に接続して U-NEXT と TVer が見られ、切断で VPS が消えた。アプリの画面を 3 枚撮って README に載せた
-  - [ ] Step 4: Release を公開する（ユーザーに確認する）
+- [ ] SmartScreen の警告の画像を README に載せる（インストーラを落とし直して実行したときに撮る）
+  - 派生元: 「ドキュメントを整備する」（2026-11-19 に完了。[plan](docs/plans/archive/docs.md)）
 
 ## 消し忘れの対策（課金）
 
@@ -41,7 +31,7 @@
 ## Tailscale まわり
 
 - [ ] 出口ノード（`tag:vpn-on-demand`）から tailnet の中へは通さない設定を検討する
-  - 今はユーザーの tailnet のポリシーが全許可なら、VPS から tailnet の機械へ届く。README で案内する grants の例を考える
+  - 今はユーザーの tailnet のポリシーが全許可なら、VPS から tailnet の機械へ届く。README で案内する grants の例を考える（決まったら README の「Security notes」を直す）
 - [ ] auth key の期限（最長 90 日）への対策を決める
   - 案: 設定画面で Tailscale の OAuth クライアントを入力してもらい、接続のたびに短命の auth key を発行する（期限切れが無くなり、user data に残るキーも使い捨てになる）。または期限が近いことを警告する
 
