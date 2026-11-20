@@ -15,6 +15,8 @@ you don't use it.
 - **Built not to leave a server running.** It disconnects by itself after a few hours, warns you
   when you quit, and finds a leftover server the next time it starts.
 
+<p align="center"><img src="docs/images/connected.png" width="420" alt="The app while connected through Tokyo: the public IP address, how long the server has been running, the cost so far, and the time until it disconnects by itself"></p>
+
 It was made to watch Japan-only streaming sites from outside Japan, as a replacement for a
 commercial VPN subscription.
 
@@ -171,9 +173,13 @@ Start **VPN on Demand**. The first time, it opens the **Settings** tab.
 
 The keys are saved in Windows Credential Manager, not in a file.
 
+<p align="center"><img src="docs/images/settings.png" width="420" alt="The Settings tab with all four steps of the setup checklist checked"></p>
+
 ## Using the app
 
 ### Connect
+
+<p align="center"><img src="docs/images/connect.png" width="420" alt="The Connect tab before connecting, with the exit location set to Tokyo and a Connect via Tokyo button"></p>
 
 1. On the **Connect** tab, **Exit location** shows where the server will be. Press **Change** to
    pick another country. Countries with several locations (the United States, for example) let
@@ -281,8 +287,10 @@ are kept.
    Credential Manager.
 3. Quit the app from the tray menu.
 4. Uninstall **VPN on Demand** in Windows **Settings → Apps → Installed apps**.
-5. Delete the folder `%APPDATA%\io.github.akiraak.vpn-on-demand` if it is still there (it holds
-   the non-secret settings).
+5. Delete these two folders if they are still there. Paste each path into the address bar of
+   File Explorer to find it.
+   - `%APPDATA%\io.github.akiraak.vpn-on-demand` (the non-secret settings)
+   - `%LOCALAPPDATA%\io.github.akiraak.vpn-on-demand` (the cache of the app's window)
 
 If you won't use the app again, also revoke what you created for it:
 

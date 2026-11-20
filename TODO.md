@@ -29,7 +29,8 @@
     - 2026-11-19: 書いた。画像は Step 3 で撮って足す
   - [x] Step 2: GitHub Actions でインストーラを作り、下書きの Release に添付するワークフローを書く
     - 2026-11-19: `.github/workflows/release.yml` を書いた。動かすのは Step 3（タグを push したとき）
-  - [ ] Step 3: `v0.1.0` の下書きの Release を作り、sx360 で README だけを見て入れて通しで使う。README の画像を撮る
+  - [x] Step 3: `v0.1.0` の下書きの Release を作り、sx360 で README だけを見て入れて通しで使う。README の画像を撮る
+    - 2026-11-20: 下書きの Release ができた（Actions で約 11 分）。sx360 でまっさらな状態から入れ直し、東京に接続して U-NEXT と TVer が見られ、切断で VPS が消えた。アプリの画面を 3 枚撮って README に載せた
   - [ ] Step 4: Release を公開する（ユーザーに確認する）
 
 ## 消し忘れの対策（課金）
